@@ -1,18 +1,18 @@
-import './App.css'
-import { Suspense, lazy } from 'react'
-import reactLogo from './assets/react.svg'
+import React, { Suspense, lazy } from 'react';
+import './App.css';
+import reactLogo from './assets/react.svg';
 
 // Works also with SSR as expected
-const Card = lazy(() => import('./Card'))
+const Card = lazy(() => import('./Card'));
 
 function App() {
   return (
     <>
       <div>
-        <a href="https://vite.dev" target="_blank">
+        <a href="https://vite.dev" target="_blank" rel="noreferrer">
           <img src="/vite.svg" className="logo" alt="Vite logo" />
         </a>
-        <a href="https://reactjs.org" target="_blank">
+        <a href="https://reactjs.org" target="_blank" rel="noreferrer">
           <img src={reactLogo} className="logo react" alt="React logo" />
         </a>
       </div>
@@ -26,7 +26,7 @@ function App() {
         Click on the Vite and React logos to learn more
       </p>
     </>
-  )
+  );
 }
 
-export default App
+export default App;

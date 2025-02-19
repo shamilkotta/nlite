@@ -1,18 +1,17 @@
-import { useState } from 'react'
+import React from 'react';
+const delay = (ms: number) => new Promise((res) => setTimeout(res, ms));
 
-function Card() {
-  const [count, setCount] = useState(0)
+async function Card() {
+  await delay(5000);
 
   return (
     <div className="card">
-      <button onClick={() => setCount((count) => count + 1)}>
-        count is {count}
-      </button>
+      <button>count is {123}</button>
       <p>
         Edit <code>src/App.tsx</code> and save to test HMR
       </p>
     </div>
-  )
+  );
 }
 
-export default Card
+export default Card;
