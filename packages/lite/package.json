@@ -27,6 +27,7 @@
     "cross-env": "^7.0.3",
     "tsx": "^4.19.3",
     "typescript": "~5.7.2",
-    "vite": "^6.0.1"
+    "vite": "^6.0.1",
+    "vite-css-modules": "^1.8.4"
   }
 }

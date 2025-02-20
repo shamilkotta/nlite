@@ -8,7 +8,7 @@ const Card = lazy(() => import('./Card'));
 function App() {
   return (
     <>
-      <div>
+      <div style={{ backgroundColor: 'red' }}>
         <a href="https://vite.dev" target="_blank" rel="noreferrer">
           <img src="/vite.svg" className="logo" alt="Vite logo" />
         </a>
