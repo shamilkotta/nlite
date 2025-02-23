@@ -10,7 +10,7 @@ import { type Route } from "nlite";
 const routes: Route[] = [
   {
     path: "/",
-    module: "./home",
+    module: "/src/home",
     prerender: true,
     incremental: "1 day",
     middleWare: [],
@@ -35,7 +35,7 @@ const routes: Route[] = [
     children: [
       {
         path: "/company",
-        element: "./company",
+        module: "./company",
         layout: "./layout",
         prerender: false,
         middleWare: []
