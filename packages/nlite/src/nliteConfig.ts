@@ -1,9 +1,12 @@
-import { defineConfig, UserConfig } from "vite";
-import react from "@vitejs/plugin-react";
+import { Plugin } from "esbuild";
 
-export const nliteConfig = (config: UserConfig) => {
-  return defineConfig({
+export type NliteConfig = {
+  plugins?: Plugin[];
+};
+
+export const nliteConfig = (config: NliteConfig) => {
+  return {
     ...config,
-    plugins: config.plugins ? [...config.plugins, react()] : [react()]
-  });
+    envPrefix: "NLITE_"
+  };
 };

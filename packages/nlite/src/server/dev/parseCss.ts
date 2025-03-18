@@ -1,5 +1,5 @@
 import fs from "fs";
-import { ModuleNode, UpdatePayload, ViteDevServer } from "vite";
+import { ModuleNode, ViteDevServer } from "vite";
 
 import { getFile } from "../../utils/resolveDir";
 
@@ -44,18 +44,18 @@ export const collectCss = (
  * Client listener to detect updated modules through HMR, and remove the initial styled attached to the head
  */
 export const removeCssHotReloaded = () => {
-  if (import.meta.hot) {
-    import.meta.hot.on("vite:beforeUpdate", (module: UpdatePayload) => {
-      module.updates.forEach((update) => {
-        const moduleStyle = document.querySelector(
-          `[vite-module-id="${hashCode(update.acceptedPath)}"]`
-        );
-        if (moduleStyle) {
-          moduleStyle.remove();
-        }
-      });
-    });
-  }
+  // if (import.meta.hot) {
+  //   import.meta.hot.on("vite:beforeUpdate", (module: UpdatePayload) => {
+  //     module.updates.forEach((update) => {
+  //       const moduleStyle = document.querySelector(
+  //         `[vite-module-id="${hashCode(update.acceptedPath)}"]`
+  //       );
+  //       if (moduleStyle) {
+  //         moduleStyle.remove();
+  //       }
+  //     });
+  //   });
+  // }
 };
 
 const hashCode = (moduleId: string) => {

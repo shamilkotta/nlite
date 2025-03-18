@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "nlite": "nlite",
-    "dev": "nlite dev",
+    "dev": "NODE_OPTIONS='--conditions=react-server' nlite dev",
     "build": "nlite build",
     "start": "nlite start"
   },

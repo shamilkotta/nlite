@@ -6,9 +6,9 @@ async function Card() {
 
   return (
     <div className="card">
-      <button>count is {123}</button>
+      <button>count hahahah {123}</button>
       <p>
-        Edit <code>src/App.tsx</code> and save to test HMR
+        <code>src/App.tsx</code>and save to
       </p>
     </div>
   );

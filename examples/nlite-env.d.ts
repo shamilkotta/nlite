@@ -1,1 +1,1 @@
-/// <reference types="nlite" />
+/// <reference types="nlite/types" />

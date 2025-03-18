@@ -2,10 +2,14 @@ import express from "express";
 import path from "path";
 import { promises } from "fs";
 import sirv from "sirv";
+import chokidar from "chokidar";
+import { BuildContext } from "esbuild";
+import { tsImport } from "tsx/esm/api";
 
 import { fileExists, FileType, getProjectDir } from "../utils/resolveDir";
 import { printAndExit } from "../utils";
-import { controller } from "../server/dev";
+// import { controller } from "../server/dev";
+import { build } from "../server/build.dev";
 
 type DevServerOptions = {
   hostname?: string;
@@ -19,46 +23,48 @@ export const startServer = async (
 ) => {
   const dir = getProjectDir(directory);
 
-  const routePate = path.join(dir, "routes");
-  if (!(await fileExists(routePate, FileType.File))) {
+  const routePath = path.join(dir, "routes.ts");
+  if (!(await fileExists(routePath, FileType.File))) {
     printAndExit(`No route file exists as the project root: ${dir}`);
   }
 
   // create nlite dir
+  await promises.rm(path.join(dir, ".nlite"), {
+    recursive: true,
+    force: true
+  });
   const nliteDir = path.join(dir, ".nlite");
-  if (!(await fileExists(nliteDir, FileType.Directory))) {
-    await promises.mkdir(nliteDir);
-  }
+  await promises.mkdir(`${nliteDir}/static/media`, { recursive: true });
+  await promises.mkdir(`${nliteDir}/static/chunks`, { recursive: true });
+  await promises.mkdir(`${nliteDir}/server`, { recursive: true });
+
+  let serverWatch: BuildContext;
+  chokidar.watch(routePath).on("all", async () => {
+    const routes = await tsImport(routePath, import.meta.url);
+    serverWatch?.dispose();
+    serverWatch = await build(routes.default, dir);
+
+    // generate route trie
+    // generate route entries
+  });
 
   // create static script
-  const script = path.join(nliteDir, "static", "development", "_entry.js");
-  if (!(await fileExists(script, FileType.File))) {
-    await promises.mkdir(path.join(nliteDir, "static", "development"), {
-      recursive: true
-    });
-    await promises.writeFile(script, "");
-  }
+  // const script = path.join(nliteDir, "static", "development", "_entry.js");
+  // if (!(await fileExists(script, FileType.File))) {
+  //   await promises.mkdir(path.join(nliteDir, "static", "development"), {
+  //     recursive: true
+  //   });
+  //   await promises.writeFile(script, "");
+  // }
 
   // Create http server
   const app = express();
 
-  const base = process.env.BASE || "/"; // TODO: check on this
-
-  // Add Vite or respective production middlewares
-  const { createServer } = await import("vite");
-  const vite = await createServer({
-    server: { middlewareMode: true },
-    appType: "custom",
-    cacheDir: "./.nlite/cache",
-    configFile: "./nlite.config.ts",
-    base
-  });
-  app.use(vite.middlewares);
   app.use("/.nlite/static", sirv(".nlite/static/", { extensions: [] }));
-  app.use("*all", controller(vite, dir));
+  // app.use("*all", controller(vite, dir));
 
   // Start http server
   app.listen(port, () => {
-    console.log(`Server started at http://localhost:${port}`);
+    console.log(`App running at http://localhost:${port}`);
   });
 };

@@ -47,13 +47,7 @@ export async function fileExists(
   try {
     if (type === FileType.File) {
       try {
-        const stats = await promises.stat(`${fileName}.ts`);
-        return stats.isFile();
-      } catch (err: any) {
-        /* empty */
-      }
-      try {
-        const stats = await promises.stat(`${fileName}.js`);
+        const stats = await promises.stat(fileName);
         return stats.isFile();
       } catch (err: any) {
         /* empty */
@@ -79,4 +73,14 @@ export const getFile = (path: string) => {
   const name = parse(path).base;
   const found = files.find((x) => x.indexOf(name) === 0);
   return dirname(path) + "/" + found;
+};
+
+export const getRelativePath = (
+  dir: string,
+  target: string,
+  source: string
+) => {
+  const entry = path.resolve(dir, target);
+  const result = path.relative(entry, path.resolve(dir, source));
+  return result;
 };

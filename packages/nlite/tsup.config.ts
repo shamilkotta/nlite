@@ -11,6 +11,7 @@ export default defineConfig((options) => ({
   ],
   dts: true,
   watch: options.watch,
+  tsconfig: "./tsconfig.json",
   treeshake: true,
   format: ["esm"],
   clean: true,

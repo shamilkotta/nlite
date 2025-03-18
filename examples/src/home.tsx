@@ -7,7 +7,7 @@ import Card from "./compoents/Card";
 export const layout = ({ children }: PropsWithChildren) => {
   return (
     <div>
-      <h1>Home layout</h1>
+      <h1>Layout</h1>
       {children}
     </div>
   );
@@ -23,8 +23,14 @@ function App() {
         <a href="https://reactjs.org" target="_blank" rel="noreferrer">
           <img src={reactLogo} className="logo react" alt="React logo" />
         </a>
+        <button
+          onClick={() => {
+            console.log("test button click");
+          }}>
+          Test button
+        </button>
       </div>
-      <h1>Nlite + React</h1>
+      <h1>Nlite</h1>
 
       <Suspense fallback={<p>Loading card component...</p>}>
         <Card />

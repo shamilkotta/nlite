@@ -5,12 +5,13 @@ import { type Route } from "nlite";
 - Nested route
 - Dynamic route - [id] - /users/1
 - Splats - /users/* - /users/1/2/3
+- no routes (paths) - just for layout
 */
 
 const routes: Route[] = [
   {
     path: "/",
-    module: "/src/home",
+    module: "./src/home.tsx",
     prerender: true,
     incremental: "1 day",
     middleWare: [],
@@ -27,16 +28,16 @@ const routes: Route[] = [
   },
   {
     path: "/about",
-    module: "./about",
-    layout: "./layout",
+    module: "./src/about.tsx",
+    layout: "./src/layout.tsx",
     prerender: true,
     incremental: "1 day",
     middleWare: [],
     children: [
       {
         path: "/company",
-        module: "./company",
-        layout: "./layout",
+        module: "./src/company.tsx",
+        layout: "./src/layout.tsx",
         prerender: false,
         middleWare: []
       }
