@@ -11,10 +11,9 @@ import { type Route } from "nlite";
 const routes: Route[] = [
   {
     path: "/",
-    module: "./src/home.tsx",
+    element: "./src/home.tsx",
     prerender: true,
     incremental: "1 day",
-    middleWare: [],
     children: [
       // {
       //   path: "/about",
@@ -28,18 +27,17 @@ const routes: Route[] = [
   },
   {
     path: "/about",
-    module: "./src/about.tsx",
+    element: "./src/about.tsx",
     layout: "./src/layout.tsx",
     prerender: true,
     incremental: "1 day",
-    middleWare: [],
+    middleWare: "./src/middleware.ts",
     children: [
       {
         path: "/company",
-        module: "./src/company.tsx",
+        element: "./src/company.tsx",
         layout: "./src/layout.tsx",
-        prerender: false,
-        middleWare: []
+        prerender: false
       }
     ]
   }

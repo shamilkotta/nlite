@@ -1,4 +1,4 @@
-import React, { PropsWithChildren, Suspense } from "react";
+import { PropsWithChildren, Suspense } from "react";
 import "./App.css";
 import "./index.css";
 import reactLogo from "./assets/react.svg";
@@ -23,12 +23,7 @@ function App() {
         <a href="https://reactjs.org" target="_blank" rel="noreferrer">
           <img src={reactLogo} className="logo react" alt="React logo" />
         </a>
-        <button
-          onClick={() => {
-            console.log("test button click");
-          }}>
-          Test button
-        </button>
+        <button>Test button</button>
       </div>
       <h1>Nlite</h1>
 

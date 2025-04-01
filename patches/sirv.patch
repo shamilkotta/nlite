@@ -1,0 +1,25 @@
+diff --git a/build.js b/build.js
+index 0c6ed8e2c0949c93978dd1a244baa9bf2448e9b8..1949e1d85d17dc86d60fa46712626c20cac018f4 100644
+--- a/build.js
++++ b/build.js
+@@ -175,7 +175,6 @@ module.exports = function (dir, opts={}) {
+ 			try { pathname = decodeURI(pathname) }
+ 			catch (err) { /* malform uri */ }
+ 		}
+-
+ 		let data = lookup(pathname, extns) || isSPA && !isMatch(pathname, ignores) && lookup(fallback, extns);
+ 		if (!data) return next ? next() : isNotFound(req, res);
+ 
+diff --git a/build.mjs b/build.mjs
+index 3ad14d45630a8627b93842a04a96465120d3f223..b4c68e425d2be32f36ae65e9bc054c3943d378f5 100644
+--- a/build.mjs
++++ b/build.mjs
+@@ -175,7 +175,7 @@ export default function (dir, opts={}) {
+ 			try { pathname = decodeURI(pathname) }
+ 			catch (err) { /* malform uri */ }
+ 		}
+-
++		pathname = '/' + req.params.path.normalize().replace(/\\+/g, '/');
+ 		let data = lookup(pathname, extns) || isSPA && !isMatch(pathname, ignores) && lookup(fallback, extns);
+ 		if (!data) return next ? next() : isNotFound(req, res);
+ 

@@ -1,5 +1,5 @@
 export * from "./nliteConfig";
-// export * from "./_error";
+export * from "./lib";
 
 export interface Route {
   path?: string;
@@ -7,9 +7,8 @@ export interface Route {
   layout?: string;
   error?: string;
   loading?: string;
-  // notFound?: string;
   prerender?: boolean;
   incremental?: string;
-  middleWare?: unknown[];
+  middleWare?: string;
   children?: Route[];
 }

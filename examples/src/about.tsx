@@ -1,4 +1,5 @@
-import React, { PropsWithChildren } from "react";
+import { PropsWithChildren } from "react";
+import Counter from "./compoents/Counter";
 
 const delay = (ms: number) => new Promise((res) => setTimeout(res, ms));
 
@@ -11,6 +12,7 @@ async function About() {
       <p>
         Edit <code>src/App.tsx</code> and save to test HMR
       </p>
+      <Counter />
     </div>
   );
 }

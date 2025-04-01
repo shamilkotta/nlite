@@ -1,9 +1,7 @@
-#!/usr/bin/env node
+#!/usr/bin/env node --conditions=react-server
 
 import { Command, Option } from "commander";
 import { parseValidPositiveInteger } from "../utils/index.js";
-
-process.env.NODE_OPTIONS = "--conditions=react-server";
 
 class NliteCommand extends Command {
   createCommand(name: string) {
@@ -62,7 +60,7 @@ program
   )
   .action((directory: string, options) =>
     import("../cli/nlite-build.js").then((mod) =>
-      mod.nliteBuild(options, directory).then(() => process.exit(0))
+      mod.nliteBuild(options, directory)
     )
   )
   .usage("[directory] [options]");
@@ -109,33 +107,44 @@ program
   })
   .usage("[directory] [options]");
 
-// program
-//   .command("start")
-//   .description(
-//     "Starts Nlite in production mode. The application should be compiled with `next build` first."
-//   )
-//   .argument(
-//     "[directory]",
-//     `A directory on which to start the application. ${"If no directory is provided, the current directory will be used."}`
-//   )
-//   .addOption(
-//     new Option(
-//       "-p, --port <port>",
-//       "Specify a port number on which to start the application."
-//     )
-//       .argParser(parseValidPositiveInteger)
-//       .default(3000)
-//       .env("PORT")
-//   )
-//   .option(
-//     "-H, --hostname <hostname>",
-//     "Specify a hostname on which to start the application (default: 0.0.0.0)."
-//   )
-//   .action((directory: string, options) =>
-//     import("../cli/next-start.js").then((mod) =>
-//       mod.nextStart(options, directory)
-//     )
-//   )
-//   .usage("[directory] [options]");
+program
+  .command("start")
+  .description("Starts nlite server")
+  .argument(
+    "[directory]",
+    `A directory on which to build the application. ${"If no directory is provided, the current directory will be used."}`
+  )
+  .addOption(
+    new Option(
+      "-p, --port <port>",
+      "Specify a port number on which to start the application."
+    )
+      .argParser(parseValidPositiveInteger)
+      .default(5173)
+      .env("PORT")
+  )
+  // .option(
+  //   "-H, --hostname <hostname>",
+  //   "Specify a hostname on which to start the application (default: 0.0.0.0)."
+  // )
+  // .option(
+  //   "--experimental-https",
+  //   "Starts the server with HTTPS and generates a self-signed certificate."
+  // )
+  //   .option("--experimental-https-key, <path>", "Path to a HTTPS key file.")
+  //   .option(
+  //     "--experimental-https-cert, <path>",
+  //     "Path to a HTTPS certificate file."
+  //   )
+  //   .option(
+  //     "--experimental-https-ca, <path>",
+  //     "Path to a HTTPS certificate authority file."
+  //   )
+  .action((directory: string, options) => {
+    import("../cli/nlite-start.js").then((mod) =>
+      mod.startServer(options, options.port, directory)
+    );
+  })
+  .usage("[directory] [options]");
 
 program.parse(process.argv);

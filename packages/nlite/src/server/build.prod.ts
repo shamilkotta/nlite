@@ -4,10 +4,11 @@ import { readFile, writeFile } from "fs/promises";
 import { parse } from "es-module-lexer";
 
 import { getRelativePath } from "../utils/resolveDir";
-import { Route } from "..";
-import { generateEntries } from "./processRoutes";
+import { copyNliteStaticFiles } from "../utils";
+import { getFileName } from "../utils/readBuild";
 
 const reactComponentRegex = /\.tsx$/;
+const cachePath = "./.nlite/.cache/development";
 const loader: { [ext: string]: Loader } = {
   ".png": "file",
   ".jpg": "file",
@@ -19,11 +20,19 @@ const loader: { [ext: string]: Loader } = {
   ".css": "css"
 };
 
-export const build = async (routeList: Route[], dir: string, env = "prod") => {
-  const entries = generateEntries(routeList);
+export const build = async (
+  routeList: {
+    path: string;
+    file: string;
+  }[],
+  dir: string,
+  env = "prod"
+) => {
+  const entries = routeList
+    .filter((entry) => entry.file.trim())
+    .map((entry) => `${cachePath}/${entry.file}`);
   const buildPath = path.join(dir, ".nlite");
   const clientEntryPoints = new Set<string>();
-  const clientComponentMap: Record<string, any> = {};
 
   await esBuild({
     bundle: true,
@@ -36,10 +45,10 @@ export const build = async (routeList: Route[], dir: string, env = "prod") => {
     logLevel: "debug",
     entryPoints: [...entries],
     outdir: buildPath,
-    publicPath: "/_nlite",
-    chunkNames: "server/chunks/[name]-[hash]",
-    assetNames: "static/media/[name]-[hash]",
-    entryNames: "server/[name]-[hash]",
+    // publicPath: "/_nlite",
+    chunkNames: "server/chunks/[[name]]-[hash]",
+    assetNames: "server/media/[[name]]-[hash]",
+    entryNames: "server/[[name]]-[hash]",
     packages: "external",
     metafile: true,
     write: false,
@@ -49,27 +58,36 @@ export const build = async (routeList: Route[], dir: string, env = "prod") => {
         async setup(build) {
           // Intercept component imports to check for 'use client'
           build.onResolve(
-            { filter: reactComponentRegex },
-            async ({ path: relativePath }) => {
-              const clientPath = path.join(dir, relativePath);
-              const contents = await readFile(clientPath, "utf-8");
-
+            {
+              filter: /^(\.\/|\.\.\/)/,
+              namespace: "file"
+            },
+            async ({ path: relativePath, resolveDir }) => {
               if (
-                contents.startsWith("'use client'") ||
-                contents.startsWith('"use client"')
+                (path.extname(relativePath) === ".tsx" ||
+                  !path.extname(relativePath)) &&
+                !relativePath.includes(".nlite")
               ) {
-                clientEntryPoints.add(clientPath);
-                console.log({
-                  id: relativePath.replace(reactComponentRegex, ".js")
-                });
+                if (!path.extname(relativePath))
+                  relativePath = `${relativePath}.tsx`;
+                const clientPath = path.join(resolveDir, relativePath);
+                const contents = await readFile(clientPath, "utf-8");
 
-                return {
-                  // Avoid bundling client components into the server build.
-                  external: true,
-                  // Resolve the client import to the built `.js` file
-                  // created by the client `esbuild` process below.
-                  path: relativePath.replace(reactComponentRegex, ".js")
-                };
+                if (
+                  contents.startsWith("'use client'") ||
+                  contents.startsWith('"use client"')
+                ) {
+                  clientEntryPoints.add(clientPath);
+                  return {
+                    // Avoid bundling client components into the server build.
+                    external: true,
+                    // Resolve the client import to the built `.js` file
+                    // created by the client `esbuild` process below.
+                    path: `/_nlite/${path.basename(
+                      relativePath.replace(reactComponentRegex, ".js")
+                    )}`
+                  };
+                }
               }
             }
           );
@@ -93,11 +111,21 @@ export const build = async (routeList: Route[], dir: string, env = "prod") => {
                   path.join(
                     buildPath,
                     "static",
-                    "chunks",
+                    "css",
                     file.path.split("/").slice(-1)[0]
                   ),
                   file.text
                 );
+              } else if (file.path.endsWith(".js")) {
+                let text = file.text;
+                if (file.text.includes("/_nlite/")) {
+                  if (file.path.includes("chunks")) {
+                    text = file.text.replaceAll("/_nlite/", "../../static/");
+                  } else {
+                    text = file.text.replaceAll("/_nlite/", "../static/");
+                  }
+                }
+                writeFile(file.path, text);
               } else {
                 writeFile(file.path, file.text);
               }
@@ -111,7 +139,7 @@ export const build = async (routeList: Route[], dir: string, env = "prod") => {
 
   await esBuild({
     bundle: true,
-    minify: true,
+    // minify: true,
     sourcemap: env == "dev",
     treeShaking: true,
     format: "esm",
@@ -120,16 +148,17 @@ export const build = async (routeList: Route[], dir: string, env = "prod") => {
     publicPath: "/_nlite",
     entryPoints: [...clientEntryPoints],
     outdir: path.join(buildPath, "static"),
-    chunkNames: "chunks/[name]-[hash]",
-    assetNames: "media/[name]-[hash]",
+    chunkNames: "chunks/[[name]]-[hash]",
+    assetNames: "media/[[name]]-[hash]",
+    entryNames: "[[name]]-[hash]",
     splitting: true,
     write: false,
     metafile: true,
     plugins: [
       {
-        name: "resolve-client-imports",
-        setup(build) {
-          build.onEnd((res) => {
+        name: "write-client-imports",
+        async setup(build) {
+          build.onEnd(async (res) => {
             if (res.errors.length) {
               console.error(res.errors[0].text);
               return;
@@ -141,47 +170,36 @@ export const build = async (routeList: Route[], dir: string, env = "prod") => {
               );
             }
 
-            // TODO: only add id and typeof for jsx files
-            // TODO: add css to chunks
-            res.outputFiles?.forEach(async (file) => {
-              // Parse file export names
-              const [, exports] = parse(file.text);
-              let newContents = file.text;
-
-              for (const exp of exports) {
-                // Create a unique lookup key for each exported component.
-                // Could be any identifier!
-                // We'll choose the file path + export name for simplicity.
-                const key = file.path;
-                console.log({ key });
-                console.log({
-                  path: `/.nlite/${getRelativePath(dir, ".nlite", file.path)}`
-                });
-
-                clientComponentMap[key] = {
-                  // Have the browser import your component from your server
-                  // at `/build/[component].js`
-                  id: `/.nlite/${getRelativePath(dir, ".nlite", file.path)}`,
-                  // Use the detected export name
-                  name: exp.n,
-                  // Turn off chunks. This is webpack-specific
-                  chunks: [],
-                  // Use an async import for the built resource in the browser
-                  async: true
-                };
-
-                // Tag each component export with a special `react.client.reference` type
-                // and the map key to look up import information.
-                // This tells your stream renderer to avoid rendering the
-                // client component server-side. Instead, import the built component
-                // client-side at `clientComponentMap[key].id`
-                newContents += `
-                  ${exp.ln}.$$id = ${JSON.stringify(key)};
-                  ${exp.ln}.$$typeof = Symbol.for("react.client.reference");
-              `;
+            const clientEntries = [...clientEntryPoints];
+            for (const file of res.outputFiles!) {
+              if (file.path.endsWith(".css")) {
+                writeFile(
+                  path.join(
+                    buildPath,
+                    "static",
+                    "css",
+                    file.path.split("/").slice(-1)[0]
+                  ),
+                  file.text
+                );
+                continue;
               }
-              await writeFile(file.path, newContents);
-            });
+
+              let newContents = file.text;
+              const fileName = getFileName(file.path);
+
+              if (clientEntries.find((el) => path.parse(el).name == fileName)) {
+                const [, exports] = parse(file.text);
+                for (const exp of exports) {
+                  const key = `/_nlite/${getRelativePath(dir, ".nlite/static", file.path)}#${exp.n}`;
+                  newContents += `${exp.ln}.$$id = ${JSON.stringify(key)};\n`;
+                  newContents += `${exp.ln}.$$typeof = Symbol.for("react.client.reference");`;
+                }
+              }
+
+              writeFile(file.path, newContents);
+            }
+            await copyNliteStaticFiles();
           });
         }
       }

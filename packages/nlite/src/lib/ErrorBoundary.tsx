@@ -42,7 +42,7 @@ const initialState: ErrorBoundaryState = {
   error: null
 };
 
-export class ErrorBoundary extends Component<
+export default class ErrorBoundary extends Component<
   ErrorBoundaryPropsWithRender,
   ErrorBoundaryState
 > {

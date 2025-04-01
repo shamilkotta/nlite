@@ -1,16 +1,10 @@
+import { deserialize, serialize } from "node:v8";
+
 interface Route {
   module?: string;
-  layout?: string;
-  error?: string;
-  loading?: string;
   prerender?: boolean;
-  middleWare?: any[];
-  output: {
-    module?: string;
-    layout?: string;
-    error?: string;
-    loading?: string;
-  };
+  middleWare?: boolean;
+  css: string[];
 }
 
 interface TrieNode {
@@ -34,6 +28,15 @@ export default class RouteTrie {
   insert(path: string, route: Route) {
     const segments = this.splitPath(path);
     let currentNode = this.root;
+    if (segments.length == 0) {
+      currentNode.children.set("", {
+        segment: "",
+        children: new Map(),
+        route: route
+      });
+
+      return;
+    }
 
     for (const segment of segments) {
       if (!currentNode.children.has(segment)) {
@@ -49,24 +52,59 @@ export default class RouteTrie {
     currentNode.route = route;
   }
 
-  match(path: string): Route | undefined {
+  print(node?: TrieNode) {
+    const currentNode = node || this.root;
+    console.log({
+      path: currentNode.segment,
+      route: JSON.stringify(currentNode.route)
+    });
+    if (currentNode.children.size) {
+      currentNode.children.forEach((childNode) => {
+        this.print(childNode);
+      });
+    }
+  }
+
+  match(
+    path: string
+  ): { match: Route; params: Record<string, string> } | undefined {
     const segments = this.splitPath(path);
     let currentNode = this.root;
+    let splat = null;
+    const params: Record<string, string> = {};
+
+    if (segments.length == 0) {
+      return currentNode.children.has("")
+        ? { match: currentNode.children.get("")!.route!, params }
+        : undefined;
+    }
 
     for (const segment of segments) {
+      let isFound = false;
+      const childNoddes = [...currentNode.children.entries()];
+      const dynamicSegment = childNoddes.find(([key]) => key.startsWith(":"));
       if (currentNode.children.has(segment)) {
+        isFound = true;
         currentNode = currentNode.children.get(segment)!;
-      } else if (currentNode.children.has(":")) {
-        currentNode = currentNode.children.get(":")!;
-      } else {
-        return undefined;
+      } else if (dynamicSegment) {
+        isFound = true;
+        currentNode = dynamicSegment[1];
+        params[dynamicSegment[0].slice(1)] = segment;
+      }
+      if (currentNode.children.has("*")) {
+        splat = currentNode.children.get("*")!;
+      }
+
+      if (!isFound) {
+        return splat ? { match: splat.route!, params } : undefined;
       }
     }
 
-    return currentNode.route;
+    return { match: currentNode.route!, params };
   }
 
-  matchWithParams(path: string): MatchedRoute | undefined {
+  // TODO: remove this function
+  private matchWithParams(path: string): MatchedRoute | undefined {
     const segments = this.splitPath(path);
     let currentNode = this.root;
     const params: Record<string, string> = {};
@@ -88,6 +126,14 @@ export default class RouteTrie {
     }
 
     return undefined;
+  }
+
+  serializeTrie() {
+    return serialize(this.root);
+  }
+
+  deSerializeTrie(data: Buffer) {
+    return deserialize(data);
   }
 
   private splitPath(path: string): string[] {

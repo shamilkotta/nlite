@@ -5,7 +5,7 @@ import { parse } from "es-module-lexer";
 
 import { getRelativePath } from "../utils/resolveDir";
 import { Route } from "..";
-import { generateEntries } from "./processRoutes";
+// import { generateEntries } from "./processRoutes";
 
 const reactComponentRegex = /\.tsx$/;
 const loader: { [ext: string]: Loader } = {
@@ -19,8 +19,8 @@ const loader: { [ext: string]: Loader } = {
   ".css": "css"
 };
 
-export const build = async (routeList: Route[], dir: string, env = "dev") => {
-  const entries = generateEntries(routeList);
+export const build = async (_: Route[], dir: string, env = "dev") => {
+  // const entries = generateEntries(routeList);
   const buildPath = path.join(dir, ".nlite");
   let clientCtx: BuildContext;
   const clientEntryPoints = new Set<string>();
@@ -35,7 +35,7 @@ export const build = async (routeList: Route[], dir: string, env = "dev") => {
     treeShaking: true,
     format: "esm",
     logLevel: "debug",
-    entryPoints: [...entries],
+    entryPoints: [...[]],
     outdir: buildPath,
     publicPath: "/_nlite",
     chunkNames: "server/chunks/[name]-[hash]",

@@ -7,7 +7,8 @@ export default defineConfig((options) => ({
   entry: [
     "src/**/*.{js,jsx,ts,tsx}",
     "!src/index.html",
-    "!src/**/*.d.{ts,tsx}"
+    "!src/**/*.d.{ts,tsx}",
+    "!src/static/**/*"
   ],
   dts: true,
   watch: options.watch,
@@ -23,5 +24,6 @@ export default defineConfig((options) => ({
     options.outbase = "src";
   },
   keepNames: true,
-  ignoreWatch: ["**/*.d.ts", "node_modules", "dist"]
+  ignoreWatch: ["**/*.d.ts", "node_modules", "dist"],
+  onSuccess: "pnpm run build:static"
 }));
