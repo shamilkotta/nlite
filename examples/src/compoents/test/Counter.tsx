@@ -1,9 +1,8 @@
 "use client";
 import { useState } from "react";
-import "./count.css";
-import Image from "../assets/react.svg";
-import Inner from "./Inner";
-import Card from "./Card";
+import "../count.css";
+import Image from "../../assets/images/react.svg";
+import Inner from "../Inner";
 
 const Counter = () => {
   const [count, setCount] = useState(0);
@@ -13,7 +12,6 @@ const Counter = () => {
       <img src={Image} alt="New log" />
       <button onClick={() => setCount(count + 1)}>Increment</button>
       <button onClick={() => setCount(count - 1)}>Decrement</button>
-      <Card />
       <Inner />
     </div>
   );
