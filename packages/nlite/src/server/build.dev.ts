@@ -152,11 +152,6 @@ export const build = async (_: Route[], dir: string, env = "dev") => {
                           // Could be any identifier!
                           // We'll choose the file path + export name for simplicity.
                           const key = file.path;
-                          console.log({ key });
-                          console.log({
-                            path: `/.nlite/${getRelativePath(dir, ".nlite", file.path)}`
-                          });
-
                           clientComponentMap[key] = {
                             // Have the browser import your component from your server
                             // at `/build/[component].js`

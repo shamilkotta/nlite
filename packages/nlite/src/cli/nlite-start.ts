@@ -1,9 +1,12 @@
 import express from "express";
 import sirv from "sirv";
+import fs from "fs/promises";
+import path from "path";
 
 import { getProjectDir } from "../utils/resolveDir";
-// import { nliteBuild } from "./nlite-build";
+import { nliteBuild } from "./nlite-build";
 import { controller } from "../server/controller";
+import RouteTrie from "../server/routeTrie";
 
 type DevServerOptions = {
   hostname?: string;
@@ -15,8 +18,12 @@ export const startServer = async (
   port: number,
   directory?: string
 ) => {
-  // await nliteBuild(_, directory);
+  await nliteBuild(_, directory);
   const dir = getProjectDir(directory);
+  const routeCache = await fs.readFile(
+    path.join(dir, ".nlite/server", "_route")
+  );
+  const routeTree = RouteTrie.deSerializeTrie(routeCache);
 
   // Create http server
   const app = express();
@@ -29,7 +36,6 @@ export const startServer = async (
     <html>
     <head>
       <title>React Server Components from Scratch</title>
-      <script src="https://cdn.tailwindcss.com"></script>
     </head>
     <body>
       <div id="root"></div>
@@ -39,7 +45,7 @@ export const startServer = async (
 	`);
   });
 
-  app.use("*all", controller(dir));
+  app.use("*all", controller(dir, routeTree));
 
   // Start http server
   app.listen(port, () => {
