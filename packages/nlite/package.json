@@ -12,7 +12,7 @@
     "dev": "tsup --watch",
     "build": "tsup",
     "build:static": "tsx ./src/static/index.ts",
-    "test": "jest"
+    "test": "NODE_OPTIONS=--experimental-vm-modules jest"
   },
   "files": [
     "dist",
@@ -20,7 +20,7 @@
     "index.d.ts"
   ],
   "dependencies": {
-    "react-server-dom-esm": "npm:@kentcdodds/tmp-react-server-dom-esm@19.0.1",
+    "react-server-dom-esm": "npm:@shamilkotta/react-server-dom-esm@19.1.0",
     "chokidar": "^4.0.3",
     "commander": "^13.1.0",
     "compression": "^1.7.5",
@@ -30,8 +30,8 @@
     "sirv": "^3.0.0"
   },
   "peerDependencies": {
-    "react": "^19.0.0",
-    "react-dom": "^19.0.0"
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0"
   },
   "devDependencies": {
     "@types/compression": "^1.7.5",
