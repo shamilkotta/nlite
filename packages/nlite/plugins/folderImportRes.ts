@@ -71,6 +71,7 @@ export const folderImportRes = (): Plugin => ({
  * Regex for matching ESM and CJS relative imports.
  */
 const ESM_RELATIVE_IMPORT_EXP = /from\s*['"](\..+?)['"]/g;
+const IN_DIR_ESM_RELATIVE_IMPORT_EXP = /from\s*['"](\.+?)['"]/g;
 const CJS_RELATIVE_IMPORT_EXP = /require\s*\(\s*['"](\..+?)['"]\s*\)/g;
 
 /**
@@ -110,6 +111,13 @@ const modifyFolderImports = (
     );
     return match.replace(importPath, newPath);
   });
+
+  contents = contents.replace(
+    IN_DIR_ESM_RELATIVE_IMPORT_EXP,
+    (match, importPath) => {
+      return match.replace(importPath, importPath + "/index");
+    }
+  );
 
   return contents;
 };
