@@ -21,7 +21,11 @@ export const printAndExit = (message: string, code = 1) => {
   return process.exit(code);
 };
 
-const copyDirectory = async (srcDir: string, destDir: string) => {
+const copyDirectory = async (
+  srcDir: string,
+  destDir: string,
+  options?: { includes?: string[]; excludes?: string[] }
+) => {
   await fs.mkdir(destDir, { recursive: true });
   const entries = await fs.readdir(srcDir, { withFileTypes: true });
   for (const entry of entries) {
@@ -30,6 +34,8 @@ const copyDirectory = async (srcDir: string, destDir: string) => {
     if (entry.isDirectory()) {
       await copyDirectory(srcPath, destPath);
     } else {
+      if (options?.includes && !options.includes.includes(entry.name)) continue;
+      if (options?.excludes && options.excludes.includes(entry.name)) continue;
       await fs.copyFile(srcPath, destPath);
     }
   }
@@ -41,5 +47,5 @@ export const copyNliteStaticFiles = async () => {
 
   const nliteStaticDir = path.join(__dirname, "..", "static");
   const targetDir = path.join(process.cwd(), ".nlite", "static");
-  await copyDirectory(nliteStaticDir, targetDir);
+  await copyDirectory(nliteStaticDir, targetDir, { includes: ["_entry.js"] });
 };

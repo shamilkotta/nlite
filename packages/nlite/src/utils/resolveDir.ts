@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
 import path, { dirname, parse } from "path";
 import fs, { existsSync, promises, readdirSync } from "fs";
-import { printAndExit } from "./";
+import { printAndExit } from ".";
 import { warn } from "./console";
 
 const isWindows = process.platform === "win32";
