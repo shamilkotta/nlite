@@ -49,3 +49,47 @@ export const copyNliteStaticFiles = async () => {
   const targetDir = path.join(process.cwd(), ".nlite", "static");
   await copyDirectory(nliteStaticDir, targetDir, { includes: ["_entry.js"] });
 };
+
+export const staticImportReplace = (input: string) => {
+  return input.replace(
+    /from\s*["'](\.\.\/static\/[^"']*|\.\.\/\.\.\/static\/[^"']*)["']/g,
+    (_, importPath) => {
+      const newPath = importPath.replace(
+        /\.\.\/(\.\.\/)?static\//g,
+        "/_nlite/"
+      );
+      return `from "${newPath}"`;
+    }
+  );
+};
+
+export const getStaticImports = (input: string) => {
+  // find clinet component imports
+  const regex = /from\s*["'](\/_nlite\/[^"']*)["']/g;
+  const matches = [];
+  let match;
+
+  while ((match = regex.exec(input)) !== null) {
+    matches.push(match[1]);
+  }
+
+  return matches;
+};
+
+export const staticAssignementReplace = (input: string) => {
+  // find static files import / assignement and replace it with static path
+  return input.replace(
+    /(const|let|var)\s+(\w+)\s*=\s*(["'])(\.\.\/?static\/[^"']*?)(\3)/g,
+    (_, decl, varName, openQuote, path, closeQuote) => {
+      const newPath = path.replace(/\.\.\/(\.\.\/)?static\//, "/_nlite/");
+      return `${decl} ${varName} = ${openQuote}${newPath}${closeQuote}`;
+    }
+  );
+};
+
+export const convertNliteToStatic = (input: string, replacer = "../static") => {
+  return input.replace(
+    /from\s*["'](\/_nlite\/[^"']*)["']/g,
+    (_, path) => `from "${replacer}${path.slice(7)}"`
+  );
+};

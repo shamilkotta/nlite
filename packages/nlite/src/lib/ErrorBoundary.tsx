@@ -1,5 +1,6 @@
 import {
   Component,
+  ComponentType,
   createElement,
   ErrorInfo,
   PropsWithChildren,
@@ -22,9 +23,9 @@ type ErrorBoundarySharedProps = PropsWithChildren<{
 }>;
 
 export type ErrorBoundaryPropsWithRender = ErrorBoundarySharedProps & {
-  fallback?: never;
-  FallbackComponent?: never;
-  fallbackRender: (props: FallbackProps) => ReactNode;
+  fallback?: ReactNode;
+  FallbackComponent?: ComponentType<FallbackProps>;
+  fallbackRender?: (props: FallbackProps) => ReactNode;
 };
 
 type ErrorBoundaryState =
