@@ -7,7 +7,7 @@ export interface Route {
   layout?: string;
   error?: string;
   loading?: string;
-  prerender?: boolean;
+  rendering?: "default" | "ssr" | "ssg";
   incremental?: string;
   middleWare?: string;
   children?: Route[];

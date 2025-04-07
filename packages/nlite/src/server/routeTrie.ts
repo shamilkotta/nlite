@@ -1,9 +1,11 @@
 import { deserialize, serialize } from "node:v8";
 
-interface Route {
+export interface Route {
   module?: string;
-  prerender?: boolean;
-  middleWare?: boolean;
+  rendering?: "default" | "ssr" | "ssg";
+  incremental?: string;
+  rsc?: string;
+  shell?: string;
   css: string[];
 }
 
@@ -13,16 +15,11 @@ interface TrieNode {
   route?: Route;
 }
 
-interface MatchedRoute {
-  route: Route;
-  params: Record<string, string>;
-}
-
 export default class RouteTrie {
   private root: TrieNode;
 
-  constructor() {
-    this.root = { segment: "", children: new Map(), route: undefined };
+  constructor(root?: TrieNode) {
+    this.root = root || { segment: "", children: new Map(), route: undefined };
   }
 
   insert(path: string, route: Route) {
@@ -103,37 +100,13 @@ export default class RouteTrie {
     return { match: currentNode.route!, params };
   }
 
-  // TODO: remove this function
-  private matchWithParams(path: string): MatchedRoute | undefined {
-    const segments = this.splitPath(path);
-    let currentNode = this.root;
-    const params: Record<string, string> = {};
-
-    for (const segment of segments) {
-      if (currentNode.children.has(segment)) {
-        currentNode = currentNode.children.get(segment)!;
-      } else if (currentNode.children.has(":")) {
-        const dynamicSegment = currentNode.children.get(":")!;
-        params[dynamicSegment.segment.slice(1)] = segment;
-        currentNode = dynamicSegment;
-      } else {
-        return undefined;
-      }
-    }
-
-    if (currentNode.route) {
-      return { route: currentNode.route, params };
-    }
-
-    return undefined;
-  }
-
   serializeTrie() {
     return serialize(this.root);
   }
 
-  deSerializeTrie(data: Buffer) {
-    return deserialize(data);
+  public static deSerializeTrie(data: Buffer) {
+    const parsed = deserialize(data);
+    return new RouteTrie(parsed);
   }
 
   private splitPath(path: string): string[] {

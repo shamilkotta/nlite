@@ -12,7 +12,7 @@ const routes: Route[] = [
   {
     path: "/",
     element: "./src/home.tsx",
-    prerender: true,
+    rendering: "default",
     incremental: "1 day",
     children: [
       // {
@@ -29,7 +29,7 @@ const routes: Route[] = [
     path: "/about",
     element: "./src/about.tsx",
     layout: "./src/layout.tsx",
-    prerender: true,
+    rendering: "ssg",
     incremental: "1 day",
     middleWare: "./src/middleware.ts",
     children: [
@@ -37,7 +37,7 @@ const routes: Route[] = [
         path: "/company",
         element: "./src/company.tsx",
         layout: "./src/layout.tsx",
-        prerender: false
+        rendering: "default"
       }
     ]
   }

@@ -18,6 +18,8 @@ const generateScripts = (
   let wrapper = "{ children }";
   let middleware = "export const middleware = []";
 
+  // TODO: add support metadata
+
   if (element)
     imports += `import Element from "${getRelativePath(dir, cachePath, element)}";\n`;
   if (layout) {
@@ -102,7 +104,8 @@ export const generateEntry = async (
 ) => {
   const script = generateScripts(args, parentModule, dir);
   if (!script) return;
-  const name = nanoid(6); // todo generate id page based on path
+  const name = nanoid(6); // TODO: generate id page based on path
+  // TODO: create cache folder in abstracted place
   const scriptPath = path.join(
     dir,
     ".nlite",

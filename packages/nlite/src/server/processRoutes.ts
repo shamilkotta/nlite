@@ -9,8 +9,8 @@ import { getFileName } from "../utils/readBuild";
 type Store = {
   path: string;
   file: string;
-  middleware: boolean;
-  prerender?: boolean;
+  rendering?: "default" | "ssr" | "ssg";
+  incremental?: string;
 };
 
 const generateModuels = async (
@@ -32,23 +32,26 @@ const generateModuels = async (
     // if the parent path is not empty then dont' take the elemnt from empty or index route
     // if (uri == "" && parent != "" && route.element) route.element = undefined;
 
+    // generate wrapped entry point for the route
+    // (wrapped - wraps the element with layouts, error boundary etc)
     const file = await generateEntry(route, parentModule, dir);
     const newPath = parent + uri;
     store.push({
       path: newPath,
       file: file || "",
-      middleware: Boolean(route.middleWare),
-      prerender: route.prerender
+      rendering: route.rendering,
+      incremental: route.incremental
     });
     routeTree.insert(newPath, {
-      middleWare: Boolean(route.middleWare),
       module: file,
-      prerender: route.prerender,
-      css: []
+      rendering: route.rendering,
+      css: [],
+      incremental: route.incremental
     });
 
     // if the parent path ends with splat then don't go furhter for children
     if (route.children?.length && !newPath.endsWith("*")) {
+      // recursively generate entry points for children
       await generateModuels(
         route.children,
         file || null,
@@ -87,20 +90,24 @@ export const updateRouteFromBuild = async (
   );
 
   const serverFiles = Object.entries(serverManifest.outputs);
+  // iterate over each route paths
   for (const item of store) {
     const { file, path: routePath } = item;
     const name = path.parse(file).name;
     for (const [key, value] of serverFiles) {
       const buildFile = getFileName(key);
+      // find curresponding compailed file for the route
       if (buildFile === name) {
         const css = new Set<string>();
+        // get css bundle
         if (value.cssBundle) css.add(path.basename(value.cssBundle));
+        // check on inner imports for css bundle
         processImports(value.imports, css, serverManifest, clientManifest);
 
         routeTree.insert(routePath, {
           module: key,
-          middleWare: item.middleware,
-          prerender: item.prerender,
+          rendering: item.rendering,
+          incremental: item.incremental,
           css: [...css]
         });
         break;
@@ -124,6 +131,7 @@ const processImports = (
     for (const chunk of chunks) {
       const chunkOutput = serverManifest.outputs[chunk.path];
       if (chunkOutput.cssBundle) css.add(path.basename(chunkOutput.cssBundle));
+      // go through chunks again for getting client component and css imports
       processImports(chunkOutput.imports, css, serverManifest, clientManifest);
     }
   }
