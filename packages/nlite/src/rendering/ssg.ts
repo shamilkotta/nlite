@@ -1,20 +1,19 @@
-import React, { createElement } from "react";
+import { createElement } from "react";
 import fs from "fs";
 import path from "path";
-import { PassThrough } from "node:stream";
+import { ChildProcess } from "node:child_process";
 // @ts-expect-error react server
 import ReactDOMStatic from "react-server-dom-esm/static.node";
-// @ts-expect-error react server
-import ReactDOMClient from "react-server-dom-esm/client.node";
-// import ReactDOMServer from "react-dom/server.node";
 
 import { Route } from "../server/routeTrie";
 import Layout from "../static/_layout";
 import { generateTags } from ".";
+import { printAndExit } from "../utils";
 
 export const ssg = async (
   dir: string,
-  module: Route
+  module: Route,
+  client: ChildProcess
 ): Promise<{ html: string; rsc: string } | undefined> => {
   const { css, module: page } = module;
   if (!page) return;
@@ -27,55 +26,45 @@ export const ssg = async (
   }
   const Comp = createElement(Layout, { css: cssTags }, createElement(element));
   const { prelude }: { prelude: NodeJS.ReadableStream } =
-    await ReactDOMStatic.unstable_prerenderToNodeStream(Comp, "/", {
-      bootstrapModules: ["/_nlite/_entry.js"],
-      onError: (err: any) => {
-        console.log({ er: err });
-      }
-    });
+    await ReactDOMStatic.unstable_prerenderToNodeStream(Comp, "/");
 
   const fileName = path.parse(page).name;
   const rscPath = path.join(dir, ".nlite/server", fileName + ".rsc");
   const rscWrite = fs.createWriteStream(rscPath);
   prelude.pipe(rscWrite);
 
-  const passThrough = new PassThrough();
-  prelude.pipe(passThrough);
+  prelude.on("data", (chunk) => {
+    client.send({ type: "rscData", chunk: chunk.toString("utf8") });
+  });
+  prelude.on("end", () => {
+    client.send({ type: "end" });
+  });
+  prelude.on("error", (err) => {
+    client.kill();
+    printAndExit(err.message);
+  });
 
-  const Root = () => {
-    const cachedResult = ReactDOMClient.createFromNodeStream(passThrough);
-    return React.use<any>(cachedResult).root;
-  };
   const htmlPath = path.join(dir, ".nlite/server", fileName + ".html");
-  const htmlWrite = fs.createWriteStream(htmlPath);
-  console.log({ Root });
-
-  // const { pipe } = ReactDOMServer.renderToPipeableStream(
-  //   React.createElement(Root),
-  //   {
-  //     onShellReady() {
-  //       pipe(htmlWrite);
-  //     },
-  //     onShellError(error) {
-  //       console.log({ error });
-  //     }
-  //   }
-  // );
-
-  // const { pipe } = ReactDOMServer.renderToPipeableStream(Comp);
-  // const rscPath = path.join(dir, ".nlite/server", fileName + ".rsc");
-  // const rscStream = fs.createWriteStream(rscPath);
-  // await pipeline(pipe(), rscStream);
-
   return new Promise((resolve, reject) => {
-    htmlWrite.on("finish", () => {
-      resolve({ html: htmlPath, rsc: rscPath });
-    });
+    const htmlWrite = fs.createWriteStream(htmlPath);
+    function onMessage(msg: any) {
+      console.log({ msg });
 
-    htmlWrite.on("error", (err) => {
-      console.log({ err });
-
-      reject(err);
-    });
+      if (msg.type === "htmlData") {
+        htmlWrite.write(msg.chunk);
+        htmlWrite.on("error", (err) => {
+          client.off("message", onMessage);
+          reject(err);
+        });
+      } else if (msg.type === "error") {
+        client.off("message", onMessage);
+        reject(new Error("Error in child process"));
+      } else if (msg.type === "end") {
+        htmlWrite.end();
+        client.off("message", onMessage);
+        resolve({ html: htmlPath, rsc: rscPath });
+      }
+    }
+    client.on("message", onMessage);
   });
 };
