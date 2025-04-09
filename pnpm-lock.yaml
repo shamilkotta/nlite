@@ -6,7 +6,7 @@ settings:
 
 patchedDependencies:
   sirv:
-    hash: 5d19476abb0b67e22a800b75bda9a74a83460974f68dacda0deacc3cf919e086
+    hash: 6f836b258f7aaf2acdb42e40648cb98891acd5fec86985ec74d1fee718814075
     path: patches/sirv.patch
 
 importers:
@@ -95,7 +95,7 @@ importers:
         version: '@shamilkotta/react-server-dom-esm@19.1.0(react-dom@19.1.0(react@19.1.0))(react@19.1.0)'
       sirv:
         specifier: ^3.0.0
-        version: 3.0.1(patch_hash=5d19476abb0b67e22a800b75bda9a74a83460974f68dacda0deacc3cf919e086)
+        version: 3.0.1(patch_hash=6f836b258f7aaf2acdb42e40648cb98891acd5fec86985ec74d1fee718814075)
     devDependencies:
       '@types/compression':
         specifier: ^1.7.5
@@ -6105,7 +6105,7 @@ snapshots:
 
   signal-exit@4.1.0: {}
 
-  sirv@3.0.1(patch_hash=5d19476abb0b67e22a800b75bda9a74a83460974f68dacda0deacc3cf919e086):
+  sirv@3.0.1(patch_hash=6f836b258f7aaf2acdb42e40648cb98891acd5fec86985ec74d1fee718814075):
     dependencies:
       '@polka/url': 1.0.0-next.28
       mrmime: 2.0.1

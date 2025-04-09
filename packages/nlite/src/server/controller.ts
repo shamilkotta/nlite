@@ -10,10 +10,8 @@ import RouteTrie from "./routeTrie";
 export const controller =
   (dir: string, routeTree: RouteTrie) => async (_: Request, res: Response) => {
     const routePath = _?.path;
-    console.log({ url: _?.url });
 
     const matchedRoute = routeTree.match(routePath);
-    console.log({ routePath, matchedRoute });
 
     if (!matchedRoute || !matchedRoute.match || !matchedRoute.match.module) {
       // TODO: handle 404 route (ideally render user provided or global 404 page)
@@ -26,6 +24,6 @@ export const controller =
     const Page = await import(pagePath);
     const Comp = createElement(Page.default);
 
-    const { pipe } = ReactServerDOM.renderToPipeableStream(Comp);
+    const { pipe } = ReactServerDOM.renderToPipeableStream(Comp, "");
     pipe(res);
   };

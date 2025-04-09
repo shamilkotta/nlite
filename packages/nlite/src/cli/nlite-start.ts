@@ -28,7 +28,7 @@ export const startServer = async (
   // Create http server
   const app = express();
 
-  app.use("/_nlite/:path", sirv(".nlite/static/", { extensions: [] }));
+  app.use("/_nlite/*path", sirv(".nlite/static/", { extensions: [] }));
 
   app.get("/", (_, res) => {
     res.status(200).send(`
@@ -45,7 +45,7 @@ export const startServer = async (
 	`);
   });
 
-  app.use("*all", controller(dir, routeTree));
+  app.use("/rsc", controller(dir, routeTree));
 
   // Start http server
   app.listen(port, () => {
