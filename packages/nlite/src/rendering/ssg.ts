@@ -34,7 +34,7 @@ export const ssg = async (
   prelude.pipe(rscWrite);
 
   prelude.on("data", (chunk) => {
-    client.send({ type: "rscData", chunk: chunk.toString("utf8") });
+    client.send({ type: "rscData", chunk: chunk });
   });
   prelude.on("end", () => {
     client.send({ type: "end" });

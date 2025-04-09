@@ -7,7 +7,7 @@ import ReactDOMServer from "react-dom/server";
 let collectedStream = new PassThrough();
 process.on("message", (msg: any) => {
   if (msg.type == "rscData") {
-    collectedStream.write(Buffer.from(msg.chunk, "utf8"));
+    collectedStream.write(msg.chunk);
   } else if (msg.type === "end") {
     collectedStream.end();
     const Root = () => {

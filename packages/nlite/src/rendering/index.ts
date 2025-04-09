@@ -20,7 +20,8 @@ export const renderPaths = async (
   const controller = new AbortController();
   const client = fork(path.join(__dirname, "./ssg.client.js"), {
     signal: controller.signal,
-    stdio: ["pipe", "pipe", "pipe", "ipc"],
+    stdio: ["inherit", "inherit", "inherit", "ipc"],
+    serialization: "advanced", // Allows Buffer transfer,
     execArgv: ["--conditions=default"]
   });
   // register client events
