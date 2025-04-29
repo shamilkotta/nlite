@@ -27,7 +27,8 @@
   },
   "pnpm": {
     "patchedDependencies": {
-      "sirv": "patches/sirv.patch"
+      "sirv": "patches/sirv.patch",
+      "@shamilkotta/react-server-dom-esm": "patches/@shamilkotta__react-server-dom-esm.patch"
     }
   },
   "dependencies": {

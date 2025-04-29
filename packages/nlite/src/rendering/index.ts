@@ -18,12 +18,16 @@ export const renderPaths = async (
 ) => {
   // start a child process for react client
   const controller = new AbortController();
-  const client = fork(path.join(__dirname, "./ssg.client.js"), {
-    signal: controller.signal,
-    stdio: ["inherit", "inherit", "inherit", "ipc"],
-    serialization: "advanced", // Allows Buffer transfer,
-    execArgv: ["--conditions=default"]
-  });
+  const client = fork(
+    path.join(__dirname, "./ssg.client.js"),
+    [path.join(dir, ".nlite")],
+    {
+      signal: controller.signal,
+      stdio: ["inherit", "inherit", "inherit", "ipc"],
+      serialization: "advanced", // Allows Buffer transfer,
+      execArgv: ["--conditions=default"]
+    }
+  );
   // register client events
   const clientStderr = (data: any) => console.error(`${data}`);
   const clientErr = (err: Error) => {

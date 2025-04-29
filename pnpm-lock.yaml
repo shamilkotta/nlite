@@ -5,6 +5,9 @@ settings:
   excludeLinksFromLockfile: false
 
 patchedDependencies:
+  '@shamilkotta/react-server-dom-esm':
+    hash: a7789fb529d961be7c32b8d9d22dcbccf1f442f29cbdc322c401697cf788e79d
+    path: patches/@shamilkotta__react-server-dom-esm.patch
   sirv:
     hash: 6f836b258f7aaf2acdb42e40648cb98891acd5fec86985ec74d1fee718814075
     path: patches/sirv.patch
@@ -92,7 +95,7 @@ importers:
         version: 5.0.0(react@19.1.0)
       react-server-dom-esm:
         specifier: npm:@shamilkotta/react-server-dom-esm@19.1.0
-        version: '@shamilkotta/react-server-dom-esm@19.1.0(react-dom@19.1.0(react@19.1.0))(react@19.1.0)'
+        version: '@shamilkotta/react-server-dom-esm@19.1.0(patch_hash=a7789fb529d961be7c32b8d9d22dcbccf1f442f29cbdc322c401697cf788e79d)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)'
       sirv:
         specifier: ^3.0.0
         version: 3.0.1(patch_hash=6f836b258f7aaf2acdb42e40648cb98891acd5fec86985ec74d1fee718814075)
@@ -3788,7 +3791,7 @@ snapshots:
   '@rollup/rollup-win32-x64-msvc@4.34.8':
     optional: true
 
-  '@shamilkotta/react-server-dom-esm@19.1.0(react-dom@19.1.0(react@19.1.0))(react@19.1.0)':
+  '@shamilkotta/react-server-dom-esm@19.1.0(patch_hash=a7789fb529d961be7c32b8d9d22dcbccf1f442f29cbdc322c401697cf788e79d)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)':
     dependencies:
       acorn-loose: 8.4.0
       react: 19.1.0

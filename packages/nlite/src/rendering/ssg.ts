@@ -26,7 +26,7 @@ export const ssg = async (
   }
   const Comp = createElement(Layout, { css: cssTags }, createElement(element));
   const { prelude }: { prelude: NodeJS.ReadableStream } =
-    await ReactDOMStatic.unstable_prerenderToNodeStream(Comp, "/");
+    await ReactDOMStatic.unstable_prerenderToNodeStream(Comp, "");
 
   const fileName = path.parse(page).name;
   const rscPath = path.join(dir, ".nlite/server", fileName + ".rsc");

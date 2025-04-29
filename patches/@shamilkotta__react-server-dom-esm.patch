@@ -1,0 +1,13 @@
+diff --git a/cjs/react-server-dom-esm-client.node.production.js b/cjs/react-server-dom-esm-client.node.production.js
+index 0b4ae42c72d929be9e565019d34912d2cf9ccd41..68c876889aad8077771d96cc78c2cffc4baa2e05 100644
+--- a/cjs/react-server-dom-esm-client.node.production.js
++++ b/cjs/react-server-dom-esm-client.node.production.js
+@@ -1176,7 +1176,7 @@ function resolveModule(response, id, model) {
+     chunk = chunks.get(id);
+   model = JSON.parse(model, response._fromJSON);
+   var clientReference = {
+-    specifier: response._bundlerConfig + model[0],
++    specifier: response._bundlerConfig + model[0]?.replace('/_nlite/', '/static/'),
+     name: model[1]
+   };
+   prepareDestinationForModuleImpl(

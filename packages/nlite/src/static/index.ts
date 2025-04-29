@@ -8,6 +8,7 @@ build({
     .filter((el) => el !== "index.ts")
     .map((entry) => `./src/static/${entry}`),
   bundle: true,
+  minify: true,
   format: "esm",
   logLevel: "error",
   jsx: "automatic",
