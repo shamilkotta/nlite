@@ -10,7 +10,7 @@ class NliteCommand extends Command {
     command.hook("preAction", (event) => {
       const commandName = event.name();
       // TODO: check and set NODE_ENV
-      const defaultEnv = commandName === "dev" ? "development" : "production";
+      const defaultEnv = commandName === "dev" ? "development" : "development";
       //   const standardEnv = ["production", "development", "test"];
 
       //   if (process.env.NODE_ENV) {
