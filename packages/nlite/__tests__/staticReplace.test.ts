@@ -60,6 +60,22 @@ describe("static assignement replace", () => {
       const output = staticAssignementReplace(input.in);
       expect(output).toBe(input.out);
     });
+
+    const staticInputs = [
+      {
+        in: `var react_default = "./media/react-HMCELI6U.svg";`,
+        out: `var react_default = "/_nlite/media/react-HMCELI6U.svg";`
+      },
+      {
+        in: `var react_default = "../media/react-HMCELI6U.svg";`,
+        out: `var react_default = "/_nlite/media/react-HMCELI6U.svg";`
+      }
+    ];
+
+    staticInputs.forEach((input) => {
+      const output = staticAssignementReplace(input.in, "static");
+      expect(output).toBe(input.out);
+    });
   });
 });
 

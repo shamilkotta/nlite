@@ -41,6 +41,7 @@ const copyDirectory = async (
   }
 };
 
+// TODO: remove this function
 export const copyNliteStaticFiles = async () => {
   const __filename = fileURLToPath(import.meta.url);
   const __dirname = path.dirname(__filename);
@@ -76,8 +77,19 @@ export const getStaticImports = (input: string) => {
   return matches;
 };
 
-export const staticAssignementReplace = (input: string) => {
+export const staticAssignementReplace = (input: string, base?: string) => {
   // find static files import / assignement and replace it with static path
+
+  if (base == "static") {
+    return input.replace(
+      /(const|let|var)\s+(\w+)\s*=\s*(["'])(\.{1,2}\/media\/[^"']*?)(\3)/g,
+      (_, decl, varName, openQuote, path, closeQuote) => {
+        const newPath = path.replace(/\.{1,2}\/media\//, "/_nlite/media/");
+        return `${decl} ${varName} = ${openQuote}${newPath}${closeQuote}`;
+      }
+    );
+  }
+
   return input.replace(
     /(const|let|var)\s+(\w+)\s*=\s*(["'])(\.\.\/?static\/[^"']*?)(\3)/g,
     (_, decl, varName, openQuote, path, closeQuote) => {

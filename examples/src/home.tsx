@@ -16,35 +16,28 @@ export const layout = ({ children }: PropsWithChildren) => {
 
 function App() {
   return (
-    <html lang="en">
-      <head>
-        <meta charSet="UTF-8" />
-        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-        <title>Document</title>
-      </head>
-      <body>
-        <div>
-          <a href="https://vite.dev" target="_blank" rel="noreferrer">
-            <img src="/vite.svg" className="logo" alt="Vite logo" />
-          </a>
-          <a href="https://reactjs.org" target="_blank" rel="noreferrer">
-            <img src={reactLogo} className="logo react" alt="React logo" />
-          </a>
-          <button>Test button</button>
-        </div>
-        <h1>Nlite</h1>
+    <>
+      <div>
+        <a href="https://vite.dev" target="_blank" rel="noreferrer">
+          <img src="/vite.svg" className="logo" alt="Vite logo" />
+        </a>
+        <a href="https://reactjs.org" target="_blank" rel="noreferrer">
+          <img src={reactLogo} className="logo react" alt="React logo" />
+        </a>
+        <button>Test button</button>
+      </div>
+      <h1>Nlite</h1>
 
-        <Suspense fallback={<p>Loading card component...</p>}>
-          <Card />
-        </Suspense>
+      <Suspense fallback={<p>Loading card component...</p>}>
+        <Card />
+      </Suspense>
 
-        <Counter></Counter>
+      <Counter></Counter>
 
-        <p className="read-the-docs">
-          Click on the Vite and React logos to learn more
-        </p>
-      </body>
-    </html>
+      <p className="read-the-docs">
+        Click on the Vite and React logos to learn more
+      </p>
+    </>
   );
 }
 
