@@ -2,17 +2,17 @@ import { Loader, OutputFile } from "esbuild";
 import path from "path";
 import { writeFile } from "fs/promises";
 import { parse } from "es-module-lexer";
+import { fileURLToPath } from "url";
 
-import {
-  copyNliteStaticFiles,
-  getStaticImports,
-  staticAssignementReplace
-} from "../utils";
+import { getStaticImports, staticAssignementReplace } from "../utils";
 import { serverBuild } from "./server";
 import { clientBuild } from "./client";
 import { clientMatch } from "./clientMatch";
 import { getFileName } from "../utils/readBuild";
 import { getRelativePath } from "../utils/resolveDir";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 export const loader: { [ext: string]: Loader } = {
   ".png": "file",
@@ -44,12 +44,19 @@ export const build = async (
     clientExports
   );
   // client component build
-  const { clientOutpus } = await clientBuild(clientEntryPoints, buildPath, env);
+  const nliteEntry = path.join(__dirname, "..", "static", "_entry.js");
+  const { clientOutpus } = await clientBuild(
+    new Set([...clientEntryPoints, nliteEntry]),
+    buildPath,
+    env
+  );
+
+  const writePromises: Promise<any>[] = [];
 
   // write server builds to server folder
   for (const file of serverOutputs.outputFiles) {
     if (file.path.endsWith(".css")) {
-      writeStaticFiles(buildPath, file, "css");
+      writePromises.push(writeStaticFiles(buildPath, file, "css"));
       continue;
     }
 
@@ -75,7 +82,7 @@ export const build = async (
         text = text.replaceAll(key, val);
       }
 
-      writeFile(file.path, text);
+      writePromises.push(writeFile(file.path, text));
     }
   }
 
@@ -83,11 +90,20 @@ export const build = async (
   const clientEntries = [...clientEntryPoints];
   for (const file of clientOutpus.outputFiles) {
     if (file.path.endsWith(".css")) {
-      writeStaticFiles(buildPath, file, "css");
+      writePromises.push(writeStaticFiles(buildPath, file, "css"));
+      continue;
+    }
+
+    if (file.path.includes("[_entry]")) {
+      writePromises.push(
+        writeFile(path.join(buildPath, "static", "_entry.js"), file.text)
+      );
       continue;
     }
 
     let newContents = file.text;
+    // assetes file import from static folder
+    newContents = staticAssignementReplace(newContents, "static");
     const fileName = getFileName(file.path);
     if (
       !file.path.includes("/chunks/") &&
@@ -102,11 +118,10 @@ export const build = async (
       }
     }
 
-    writeFile(file.path, newContents);
+    writePromises.push(writeFile(file.path, newContents));
   }
 
-  // copy prebuilt entry file and other global wrappers
-  await copyNliteStaticFiles();
+  await Promise.all(writePromises);
 };
 
 const writeStaticFiles = (
