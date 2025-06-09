@@ -76,8 +76,9 @@ export const renderPaths = async (
 export const generateTags = (css: string[]) => {
   return css.map((val) => {
     const name = path.parse(val).name;
-    const pathFirstInd = val.lastIndexOf("/static");
-    const link = `/_nlite/${val.slice(pathFirstInd)}`;
+    // const pathFirstInd = val.lastIndexOf("/static");
+    // const link = `/_nlite/${val.slice(pathFirstInd)}`;
+    const link = `/_nlite/css/${val}`;
     return { name, link };
   });
 };
