@@ -3,7 +3,7 @@ import fs from "fs/promises";
 
 import { generateEntry } from "./generateEntry";
 import { Route } from "..";
-import RouteTrie from "./routeTrie";
+import RouteTrie from "../server/routeTrie";
 import { getFileName } from "../utils/readBuild";
 
 type Store = {

@@ -37,6 +37,7 @@ git clone git@github.com:shamilkotta/nlite.git
 cd nlite
 pnpm install
 pnpm nlite build
+pnpm example build
 pnpm example start
 # pray to the React gods
 ```

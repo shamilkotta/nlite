@@ -46,7 +46,6 @@ const Shell = ({ data }: { data: any }) => {
   return root;
 };
 
-// Hydrate the app
 hydrateRoot(
   document.getElementById("root")!,
   createElement(Shell, { data: createFromReadableStream(rscStream) })
