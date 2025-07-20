@@ -1,4 +1,4 @@
-#!/usr/bin/env node --conditions=react-server
+#!/usr/bin/env node
 
 import { Command, Option } from "commander";
 import { parseValidPositiveInteger } from "../utils/index.js";
@@ -9,24 +9,10 @@ class NliteCommand extends Command {
 
     command.hook("preAction", (event) => {
       const commandName = event.name();
-      // TODO: check and set NODE_ENV
-      const defaultEnv = commandName === "dev" ? "development" : "development";
-      //   const standardEnv = ["production", "development", "test"];
-
-      //   if (process.env.NODE_ENV) {
-      //     const isNotStandard = !standardEnv.includes(process.env.NODE_ENV);
-      //     const shouldWarnCommands =
-      //       process.env.NODE_ENV === "development"
-      //         ? ["start", "build"]
-      //         : process.env.NODE_ENV === "production"
-      //           ? ["dev"]
-      //           : [];
-
-      //     if (isNotStandard || shouldWarnCommands.includes(commandName)) {
-      //       warn(NON_STANDARD_NODE_ENV);
-      //     }
-      //   }
-
+      const prodCommands = ["build", "start"];
+      const defaultEnv = prodCommands.includes(commandName)
+        ? "production"
+        : "development";
       process.env.NODE_ENV = defaultEnv;
       process.env.NEXT_RUNTIME = "nodejs";
     });

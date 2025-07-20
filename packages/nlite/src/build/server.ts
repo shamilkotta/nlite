@@ -15,8 +15,8 @@ export const serverBuild = async (
   }[],
   buildPath: string,
   dir: string,
-  env = "prod",
-  clientExports: Map<string, string>
+  clientExports: Map<string, string>,
+  nliteIndex: string
 ) => {
   const entries = routeList
     .filter((entry) => entry.file.trim())
@@ -25,13 +25,15 @@ export const serverBuild = async (
 
   const buildOutputs = await esBuild({
     bundle: true,
+    define: {
+      "process.env.NODE_ENV": `'${process.env.NODE_ENV || "development"}'`
+    },
     jsx: "automatic",
     minify: true,
-    sourcemap: env == "dev",
     splitting: true,
     treeShaking: true,
     format: "esm",
-    logLevel: "debug",
+    logLevel: "silent",
     entryPoints: [...entries],
     outdir: buildPath,
     chunkNames: "server/chunks/[[name]]-[hash]",
@@ -40,6 +42,7 @@ export const serverBuild = async (
     packages: "external",
     metafile: true,
     write: false,
+    conditions: ["react-server"],
     plugins: [
       {
         name: "resolve-client-imports",
@@ -101,5 +104,31 @@ export const serverBuild = async (
     ],
     loader: loader
   });
+
+  await esBuild({
+    bundle: true,
+    jsx: "automatic",
+    define: {
+      "process.env.NODE_ENV": `'${process.env.NODE_ENV || "development"}'`
+    },
+    minify: false,
+    sourcemap: false,
+    splitting: false,
+    treeShaking: true,
+    format: "cjs",
+    logLevel: "silent",
+    entryPoints: [nliteIndex],
+    outdir: buildPath,
+    entryNames: "server/[name]",
+    packages: "bundle",
+    metafile: false,
+    write: true,
+    platform: "node",
+    conditions: ["react-server"],
+    outExtension: {
+      ".js": ".cjs"
+    }
+  });
+
   return { serverOutputs: buildOutputs, clientEntryPoints };
 };

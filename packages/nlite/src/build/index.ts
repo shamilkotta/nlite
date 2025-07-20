@@ -30,25 +30,24 @@ export const build = async (
     path: string;
     file: string;
   }[],
-  dir: string,
-  env = "prod"
+  dir: string
 ) => {
   const buildPath = path.join(dir, ".nlite");
   const clientExports = new Map<string, string>();
   // server component build
+  const nliteIndex = path.join(__dirname, "..", "static", "_index.js");
   const { serverOutputs, clientEntryPoints } = await serverBuild(
     routeList,
     buildPath,
     dir,
-    env,
-    clientExports
+    clientExports,
+    nliteIndex
   );
   // client component build
   const nliteEntry = path.join(__dirname, "..", "static", "_entry.js");
   const { clientOutpus } = await clientBuild(
     new Set([...clientEntryPoints, nliteEntry]),
-    buildPath,
-    env
+    buildPath
   );
 
   const writePromises: Promise<any>[] = [];

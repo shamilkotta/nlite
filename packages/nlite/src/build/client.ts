@@ -6,16 +6,16 @@ import { loader } from ".";
 
 export const clientBuild = async (
   clientEntryPoints: Set<string>,
-  buildPath: string,
-  env = "prod"
+  buildPath: string
 ) => {
   const buildOutputs = await esBuild({
     bundle: true,
-    // minify: true,
-    sourcemap: env == "dev",
+    define: {
+      "process.env.NODE_ENV": `'${process.env.NODE_ENV || "development"}'`
+    },
     treeShaking: true,
     format: "esm",
-    logLevel: "error",
+    logLevel: "silent",
     jsx: "automatic",
     // publicPath: "/_nlite",
     entryPoints: [...clientEntryPoints],
