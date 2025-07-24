@@ -24,23 +24,23 @@ const routes: Route[] = [
       //   middleWare: [],
       // },
     ]
-  },
-  {
-    path: "/about",
-    element: "./src/about.tsx",
-    layout: "./src/layout.tsx",
-    rendering: "ssg",
-    incremental: "1 day",
-    middleWare: "./src/middleware.ts",
-    children: [
-      {
-        path: "/company",
-        element: "./src/company.tsx",
-        layout: "./src/layout.tsx",
-        rendering: "default"
-      }
-    ]
   }
+  // {
+  //   path: "/about",
+  //   element: "./src/about.tsx",
+  //   layout: "./src/layout.tsx",
+  //   rendering: "ssg",
+  //   incremental: "1 day",
+  //   middleWare: "./src/middleware.ts",
+  //   children: [
+  //     {
+  //       path: "/company",
+  //       element: "./src/company.tsx",
+  //       layout: "./src/layout.tsx",
+  //       rendering: "default"
+  //     }
+  //   ]
+  // }
 ];
 
 export default routes;

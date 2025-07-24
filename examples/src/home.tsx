@@ -3,7 +3,7 @@ import "./App.css";
 import "./index.css";
 import reactLogo from "./assets/react.svg";
 import Card from "./compoents/Card";
-import Counter from "./compoents/Counter";
+// import Counter from "./compoents/Counter";
 
 export const layout = ({ children }: PropsWithChildren) => {
   return (
@@ -32,7 +32,7 @@ function App() {
         <Card />
       </Suspense>
 
-      <Counter></Counter>
+      {/* <Counter></Counter> */}
 
       <p className="read-the-docs">
         Click on the Vite and React logos to learn more
