@@ -2,6 +2,9 @@
 
 import { Command, Option } from "commander";
 import { parseValidPositiveInteger } from "../utils/index.js";
+import { createRequire } from "module";
+const require = createRequire(import.meta.url);
+const { version } = require("../../package.json");
 
 class NliteCommand extends Command {
   createCommand(name: string) {
@@ -29,11 +32,7 @@ program
     "The Nlite CLI allows you to develop, build, start your application, and more."
   )
   .helpCommand(true)
-  .version(
-    `Nlite v${process.env.__NLITE_VERSION}`, // TODO: set version
-    "-v, --version",
-    "Outputs the Nlite version."
-  );
+  .version(`Nlite v${version}`, "-v, --version", "Outputs the Nlite version.");
 
 program
   .command("build")
