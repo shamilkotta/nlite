@@ -6,7 +6,7 @@ import { fileExists, FileType, getProjectDir } from "../utils/resolveDir";
 import { printAndExit } from "../utils";
 import { build } from "../build";
 import { parseRotues, updateRouteFromBuild } from "../build/processRoutes";
-// import { renderPaths } from "../rendering";
+import { renderPaths } from "../rendering";
 
 type BuildOptions = object;
 
@@ -43,8 +43,7 @@ export const nliteBuild = async (_: BuildOptions, directory?: string) => {
   // update route tree with compailed files
   await updateRouteFromBuild(routeTree, store, dir);
   rm(path.join(dir, ".nlite/.cache/development"), { recursive: true });
-  // WIP: Pre render routes
-  // await renderPaths(dir, routeTree, store);
+  await renderPaths(dir, routeTree, store);
 
   await writeFile(
     path.join(dir, ".nlite/server/_route"),
