@@ -27,7 +27,7 @@ const generateScripts = (
   }
   if (error) {
     imports += `import Error from "${getRelativePath(dir, cachePath, error)}";\n`;
-    imports += `import { ErrorBoundary } from "nlite";\n`;
+    imports += `import { ErrorBoundary } from "nlite-v0";\n`;
   }
   if (loading) {
     imports += `import Loading from "${getRelativePath(dir, cachePath, loading)}";\n`;

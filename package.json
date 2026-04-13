@@ -8,7 +8,9 @@
     "lint": "eslint .",
     "format": "prettier --write .",
     "nlite": "pnpm --filter nlite",
-    "example": "pnpm --filter example"
+    "nlite-v0": "pnpm --filter nlite-v0",
+    "example:v0": "pnpm --filter example-v0",
+    "example:v2": "pnpm --filter example-v2"
   },
   "keywords": [],
   "author": "",

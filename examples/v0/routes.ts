@@ -1,4 +1,4 @@
-import { type Route } from "nlite";
+import { type Route } from "nlite-v0";
 
 /*
 - index Route
