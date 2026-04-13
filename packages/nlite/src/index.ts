@@ -1,14 +1,12 @@
-export * from "./nliteConfig";
-export * from "./lib";
-
-export interface Route {
-  path?: string;
-  element?: string;
-  layout?: string;
-  error?: string;
-  loading?: string;
-  rendering?: "default" | "ssr" | "ssg";
-  incremental?: string;
-  middleWare?: string;
-  children?: Route[];
-}
+export { nlite } from "./plugin.js";
+export { defineConfig, mergeConfig } from "./config.js";
+export type {
+  NliteRouter,
+  NavigateOptions,
+  NliteOptions,
+  NliteRouteMatch,
+  NliteRouteRecord,
+  RenderingMode,
+  RouterNavigateOptions,
+  RouteParams
+} from "./types.js";

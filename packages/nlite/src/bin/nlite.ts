@@ -1,135 +1,118 @@
 #!/usr/bin/env node
 
-import { Command, Option } from "commander";
-import { parseValidPositiveInteger } from "../utils/index.js";
-import { createRequire } from "module";
-const require = createRequire(import.meta.url);
-const { version } = require("../../package.json");
+import { spawn } from "node:child_process";
+import { existsSync } from "node:fs";
+import path from "node:path";
+import { createRequire } from "node:module";
 
-class NliteCommand extends Command {
-  createCommand(name: string) {
-    const command = new Command(name);
+const args = process.argv.slice(2);
+const viteArgs = buildViteArgs(args);
+const rootDir = resolveProjectRoot(args);
+const configFile = resolveConfigFile(rootDir, viteArgs);
+const viteBin = resolveViteBin(rootDir);
 
-    command.hook("preAction", (event) => {
-      const commandName = event.name();
-      const prodCommands = ["build", "start"];
-      const defaultEnv = prodCommands.includes(commandName)
-        ? "production"
-        : "development";
-      process.env.NODE_ENV = defaultEnv;
-      process.env.NEXT_RUNTIME = "nodejs";
-    });
-
-    return command;
+const child = spawn(
+  process.execPath,
+  [viteBin, ...injectConfigArg(viteArgs, configFile)],
+  {
+    cwd: process.cwd(),
+    stdio: "inherit",
+    env: process.env
   }
+);
+
+child.on("exit", (code, signal) => {
+  if (signal) {
+    process.kill(process.pid, signal);
+    return;
+  }
+
+  process.exit(code ?? 0);
+});
+
+function buildViteArgs(inputArgs: string[]) {
+  const normalizedArgs = inputArgs.filter((arg) => arg !== "--");
+  const [firstArg, ...rest] = normalizedArgs;
+
+  if (!firstArg || firstArg.startsWith("-")) {
+    return normalizedArgs;
+  }
+
+  if (firstArg === "start") {
+    return ["preview", ...rest];
+  }
+
+  return normalizedArgs;
 }
 
-const program = new NliteCommand();
+function resolveProjectRoot(inputArgs: string[]) {
+  const [firstArg, secondArg] = inputArgs;
 
-program
-  .name("nlite")
-  .description(
-    "The Nlite CLI allows you to develop, build, start your application, and more."
-  )
-  .helpCommand(true)
-  .version(`Nlite v${version}`, "-v, --version", "Outputs the Nlite version.");
+  if (firstArg && !firstArg.startsWith("-")) {
+    if (isViteCommand(firstArg)) {
+      if (secondArg && !secondArg.startsWith("-")) {
+        return path.resolve(process.cwd(), secondArg);
+      }
 
-program
-  .command("build")
-  .description(
-    "Creates an optimized production build of your application. The output displays information about each route."
-  )
-  .argument(
-    "[directory]",
-    `A directory on which to build the application. ${"If no directory is provided, the current directory will be used."}`
-  )
-  .action((directory: string, options) =>
-    import("../cli/nlite-build.js").then((mod) =>
-      mod.nliteBuild(options, directory)
-    )
-  )
-  .usage("[directory] [options]");
+      return process.cwd();
+    }
 
-program
-  .command("dev", { isDefault: true })
-  .description(
-    "Starts Nlite in development mode with HMR, error reporting, and more."
-  )
-  .argument(
-    "[directory]",
-    `A directory on which to build the application. ${"If no directory is provided, the current directory will be used."}`
-  )
-  .addOption(
-    new Option(
-      "-p, --port <port>",
-      "Specify a port number on which to start the application."
-    )
-      .argParser(parseValidPositiveInteger)
-      .default(5173)
-      .env("PORT")
-  )
-  // .option(
-  //   "-H, --hostname <hostname>",
-  //   "Specify a hostname on which to start the application (default: 0.0.0.0)."
-  // )
-  // .option(
-  //   "--experimental-https",
-  //   "Starts the server with HTTPS and generates a self-signed certificate."
-  // )
-  //   .option("--experimental-https-key, <path>", "Path to a HTTPS key file.")
-  //   .option(
-  //     "--experimental-https-cert, <path>",
-  //     "Path to a HTTPS certificate file."
-  //   )
-  //   .option(
-  //     "--experimental-https-ca, <path>",
-  //     "Path to a HTTPS certificate authority file."
-  //   )
-  .action((directory: string, options) => {
-    import("../cli/nlite-dev.js").then((mod) =>
-      mod.startServer(options, options.port, directory)
-    );
-  })
-  .usage("[directory] [options]");
+    return path.resolve(process.cwd(), firstArg);
+  }
 
-program
-  .command("start")
-  .description("Starts nlite server")
-  .argument(
-    "[directory]",
-    `A directory on which to build the application. ${"If no directory is provided, the current directory will be used."}`
-  )
-  .addOption(
-    new Option(
-      "-p, --port <port>",
-      "Specify a port number on which to start the application."
-    )
-      .argParser(parseValidPositiveInteger)
-      .default(5173)
-      .env("PORT")
-  )
-  // .option(
-  //   "-H, --hostname <hostname>",
-  //   "Specify a hostname on which to start the application (default: 0.0.0.0)."
-  // )
-  // .option(
-  //   "--experimental-https",
-  //   "Starts the server with HTTPS and generates a self-signed certificate."
-  // )
-  //   .option("--experimental-https-key, <path>", "Path to a HTTPS key file.")
-  //   .option(
-  //     "--experimental-https-cert, <path>",
-  //     "Path to a HTTPS certificate file."
-  //   )
-  //   .option(
-  //     "--experimental-https-ca, <path>",
-  //     "Path to a HTTPS certificate authority file."
-  //   )
-  .action((directory: string, options) => {
-    import("../cli/nlite-start.js").then((mod) =>
-      mod.startServer(options, options.port, directory)
-    );
-  })
-  .usage("[directory] [options]");
+  return process.cwd();
+}
 
-program.parse(process.argv);
+function resolveConfigFile(projectRoot: string, viteArgs: string[]) {
+  if (hasConfigArg(viteArgs)) {
+    return undefined;
+  }
+
+  const candidates = [
+    "nlite.config.ts",
+    "nlite.config.mts",
+    "nlite.config.js",
+    "nlite.config.mjs",
+    "nlite.config.cts",
+    "nlite.config.cjs"
+  ];
+
+  for (const candidate of candidates) {
+    const absolutePath = path.join(projectRoot, candidate);
+
+    if (existsSync(absolutePath)) {
+      return absolutePath;
+    }
+  }
+
+  return undefined;
+}
+
+function injectConfigArg(viteArgs: string[], configFile?: string) {
+  if (!configFile) {
+    return viteArgs;
+  }
+
+  return ["--config", configFile, ...viteArgs];
+}
+
+function hasConfigArg(viteArgs: string[]) {
+  return viteArgs.includes("--config") || viteArgs.includes("-c");
+}
+
+function isViteCommand(value: string) {
+  return ["dev", "build", "preview", "serve", "start"].includes(value);
+}
+
+function resolveViteBin(projectRoot: string) {
+  const localRequire = createRequire(path.join(projectRoot, "package.json"));
+
+  try {
+    const vitePackageJson = localRequire.resolve("vite/package.json");
+    return path.join(path.dirname(vitePackageJson), "bin", "vite.js");
+  } catch {
+    const vitePackageJson =
+      createRequire(import.meta.url).resolve("vite/package.json");
+    return path.join(path.dirname(vitePackageJson), "bin", "vite.js");
+  }
+}

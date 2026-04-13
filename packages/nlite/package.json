@@ -1,49 +1,54 @@
 {
   "name": "nlite",
-  "private": false,
-  "version": "0.1.0",
-  "main": "./dist/index",
+  "version": "0.0.0",
   "type": "module",
-  "types": "./dist/index.d.ts",
+  "main": "./dist/index.mjs",
+  "types": "./dist/index.d.mts",
   "bin": {
-    "nlite": "./dist/bin/nlite.js"
+    "nlite": "./bin/nlite.js"
   },
-  "scripts": {
-    "dev": "tsup --watch",
-    "build": "tsup",
-    "build:static": "tsup --config tsup.static.config.ts",
-    "test": "NODE_OPTIONS=--experimental-vm-modules jest"
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.mts",
+      "import": "./dist/index.mjs"
+    },
+    "./link": {
+      "types": "./dist/link.d.mts",
+      "import": "./dist/link.mjs"
+    },
+    "./navigation": {
+      "types": "./dist/navigation.d.mts",
+      "import": "./dist/navigation.mjs"
+    },
+    "./runtime": {
+      "types": "./dist/runtime.d.mts",
+      "import": "./dist/runtime.mjs"
+    },
+    "./package.json": "./package.json"
   },
   "files": [
-    "dist",
-    "index.js",
-    "index.d.ts"
+    "bin",
+    "dist"
   ],
+  "scripts": {
+    "build": "tsdown",
+    "dev": "tsdown --watch"
+  },
   "dependencies": {
-    "react-server-dom-esm": "npm:@shamilkotta/react-server-dom-esm@19.1.0",
-    "chokidar": "^4.0.3",
-    "commander": "^13.1.0",
-    "compression": "^1.7.5",
-    "es-module-lexer": "^1.6.0",
-    "express": "^5.0.1",
-    "react-error-boundary": "^5.0.0",
-    "sirv": "^3.0.0"
+    "@vitejs/plugin-react": "^6.0.1",
+    "@vitejs/plugin-rsc": "^0.5.23",
+    "tinyglobby": "^0.2.16",
+    "vite": "^8.0.8"
   },
   "peerDependencies": {
-    "react": "^19.1.0",
-    "react-dom": "^19.1.0"
+    "react": "^19.2.5",
+    "react-dom": "^19.2.5"
   },
   "devDependencies": {
-    "@types/compression": "^1.7.5",
-    "@types/express": "^5.0.0",
-    "@types/node": "^22.10.0",
-    "@types/react": "^19.0.10",
-    "@types/react-dom": "^19.0.4",
-    "cross-env": "^7.0.3",
-    "esbuild": "^0.24.0",
-    "nanoid": "^5.1.2",
-    "tsup": "^8.3.6",
-    "tsx": "^4.19.3",
-    "typescript": "~5.7.2"
+    "@types/node": "^24.8.1",
+    "@types/react": "^19.2.2",
+    "@types/react-dom": "^19.2.2",
+    "tsdown": "^0.21.7",
+    "typescript": "^5.9.3"
   }
 }
