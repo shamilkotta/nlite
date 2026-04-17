@@ -5,8 +5,7 @@ import type { MouseEvent, AnchorHTMLAttributes } from "react";
 
 import { useRouter } from "./navigation.js";
 
-export interface LinkProps
-  extends Omit<AnchorHTMLAttributes<HTMLAnchorElement>, "href"> {
+export interface LinkProps extends Omit<AnchorHTMLAttributes<HTMLAnchorElement>, "href"> {
   href: string;
   replace?: boolean;
   scroll?: boolean;
@@ -28,7 +27,7 @@ const Link = forwardRef<HTMLAnchorElement, LinkProps>(function Link(
     rel,
     ...props
   },
-  ref
+  ref,
 ) {
   const router = useRouter();
 
@@ -93,11 +92,5 @@ const Link = forwardRef<HTMLAnchorElement, LinkProps>(function Link(
 export default Link;
 
 function shouldIgnoreClick(event: MouseEvent<HTMLAnchorElement>) {
-  return (
-    event.button !== 0 ||
-    event.metaKey ||
-    event.ctrlKey ||
-    event.shiftKey ||
-    event.altKey
-  );
+  return event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey;
 }

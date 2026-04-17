@@ -1,12 +1,16 @@
 {
   "name": "nlite",
   "version": "0.0.0",
-  "type": "module",
-  "main": "./dist/index.mjs",
-  "types": "./dist/index.d.mts",
   "bin": {
     "nlite": "./bin/nlite.js"
   },
+  "files": [
+    "bin",
+    "dist"
+  ],
+  "type": "module",
+  "main": "./dist/index.mjs",
+  "types": "./dist/index.d.mts",
   "exports": {
     ".": {
       "types": "./dist/index.d.mts",
@@ -26,10 +30,6 @@
     },
     "./package.json": "./package.json"
   },
-  "files": [
-    "bin",
-    "dist"
-  ],
   "scripts": {
     "build": "tsdown",
     "dev": "tsdown --watch"
@@ -40,15 +40,15 @@
     "tinyglobby": "^0.2.16",
     "vite": "^8.0.8"
   },
-  "peerDependencies": {
-    "react": "^19.2.5",
-    "react-dom": "^19.2.5"
-  },
   "devDependencies": {
     "@types/node": "^24.8.1",
     "@types/react": "^19.2.2",
     "@types/react-dom": "^19.2.2",
     "tsdown": "^0.21.7",
     "typescript": "^5.9.3"
+  },
+  "peerDependencies": {
+    "react": "^19.2.5",
+    "react-dom": "^19.2.5"
   }
 }

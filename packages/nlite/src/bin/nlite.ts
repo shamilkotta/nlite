@@ -11,15 +11,11 @@ const rootDir = resolveProjectRoot(args);
 const configFile = resolveConfigFile(rootDir, viteArgs);
 const viteBin = resolveViteBin(rootDir);
 
-const child = spawn(
-  process.execPath,
-  [viteBin, ...injectConfigArg(viteArgs, configFile)],
-  {
-    cwd: process.cwd(),
-    stdio: "inherit",
-    env: process.env
-  }
-);
+const child = spawn(process.execPath, [viteBin, ...injectConfigArg(viteArgs, configFile)], {
+  cwd: process.cwd(),
+  stdio: "inherit",
+  env: process.env,
+});
 
 child.on("exit", (code, signal) => {
   if (signal) {
@@ -74,7 +70,7 @@ function resolveConfigFile(projectRoot: string, viteArgs: string[]) {
     "nlite.config.js",
     "nlite.config.mjs",
     "nlite.config.cts",
-    "nlite.config.cjs"
+    "nlite.config.cjs",
   ];
 
   for (const candidate of candidates) {
@@ -111,8 +107,7 @@ function resolveViteBin(projectRoot: string) {
     const vitePackageJson = localRequire.resolve("vite/package.json");
     return path.join(path.dirname(vitePackageJson), "bin", "vite.js");
   } catch {
-    const vitePackageJson =
-      createRequire(import.meta.url).resolve("vite/package.json");
+    const vitePackageJson = createRequire(import.meta.url).resolve("vite/package.json");
     return path.join(path.dirname(vitePackageJson), "bin", "vite.js");
   }
 }

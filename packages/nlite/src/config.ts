@@ -3,7 +3,7 @@ import {
   mergeConfig,
   type ConfigEnv,
   type UserConfig,
-  type UserConfigExport
+  type UserConfigExport,
 } from "vite";
 
 import { nlite } from "./plugin.js";
@@ -34,6 +34,6 @@ function withNlitePlugin(config: NliteUserConfig) {
   const { nlite: nliteOptions, plugins = [], ...rest } = config;
 
   return mergeConfig(rest, {
-    plugins: [...nlite(nliteOptions), ...plugins]
+    plugins: [...nlite(nliteOptions), ...plugins],
   });
 }

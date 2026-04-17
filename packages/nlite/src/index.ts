@@ -8,5 +8,5 @@ export type {
   NliteRouteRecord,
   RenderingMode,
   RouterNavigateOptions,
-  RouteParams
+  RouteParams,
 } from "./types.js";

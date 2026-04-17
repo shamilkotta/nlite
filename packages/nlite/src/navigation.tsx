@@ -2,10 +2,7 @@
 
 import { startTransition, useSyncExternalStore } from "react";
 
-import {
-  createFromFetch,
-  createFromReadableStream
-} from "@vitejs/plugin-rsc/browser";
+import { createFromFetch, createFromReadableStream } from "@vitejs/plugin-rsc/browser";
 import { hydrateRoot, type Root } from "react-dom/client";
 
 import type { NliteRouter, RouterNavigateOptions } from "./types.js";
@@ -47,7 +44,7 @@ const router: NliteRouter = {
     }
 
     await prefetchUrl(url);
-  }
+  },
 };
 
 export async function bootNavigation() {
@@ -62,7 +59,7 @@ export async function bootNavigation() {
   window.addEventListener("popstate", () => {
     void renderUrl(new URL(window.location.href), {
       updateHistory: false,
-      scroll: false
+      scroll: false,
     });
   });
 
@@ -89,7 +86,7 @@ export function useSearchParams() {
 async function refresh() {
   await renderUrl(new URL(window.location.href), {
     updateHistory: false,
-    scroll: false
+    scroll: false,
   });
 }
 
@@ -103,10 +100,7 @@ async function navigate(href: string, options: RouterNavigateOptions) {
 
   const currentUrl = new URL(window.location.href);
 
-  if (
-    nextUrl.pathname === currentUrl.pathname &&
-    nextUrl.search === currentUrl.search
-  ) {
+  if (nextUrl.pathname === currentUrl.pathname && nextUrl.search === currentUrl.search) {
     updateBrowserHistory(nextUrl, options.replace);
 
     if (options.scroll !== false) {
@@ -118,7 +112,7 @@ async function navigate(href: string, options: RouterNavigateOptions) {
 
   await renderUrl(nextUrl, {
     updateHistory: options.replace ? "replace" : "push",
-    scroll: options.scroll ?? true
+    scroll: options.scroll ?? true,
   });
 }
 
@@ -127,7 +121,7 @@ async function renderUrl(
   options: {
     updateHistory: false | "push" | "replace";
     scroll: boolean;
-  }
+  },
 ) {
   const version = ++navigationVersion;
   const nextRoot = await fetchRouteTree(url);
@@ -156,7 +150,7 @@ function useNavigationSnapshot() {
   return useSyncExternalStore(
     subscribe,
     () => navigationSnapshot,
-    () => navigationSnapshot
+    () => navigationSnapshot,
   );
 }
 
@@ -179,7 +173,7 @@ function readSnapshot() {
     return {
       pathname: "/",
       search: "",
-      searchParams: new URLSearchParams()
+      searchParams: new URLSearchParams(),
     };
   }
 
@@ -190,7 +184,7 @@ function snapshotFromUrl(url: URL): NavigationSnapshot {
   return {
     pathname: url.pathname,
     search: url.search,
-    searchParams: new URLSearchParams(url.search)
+    searchParams: new URLSearchParams(url.search),
   };
 }
 

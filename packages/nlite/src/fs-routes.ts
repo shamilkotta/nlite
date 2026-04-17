@@ -20,14 +20,14 @@ export interface DiscoveredRoute extends RouteModuleFiles {
 export async function discoverRoutes(
   projectRoot: string,
   appDir = "app",
-  extensions = DEFAULT_EXTENSIONS
+  extensions = DEFAULT_EXTENSIONS,
 ) {
   const appRoot = path.resolve(projectRoot, appDir);
   const pagePattern = `**/page.{${extensions.join(",")}}`;
   const pageFiles = await glob(pagePattern, {
     cwd: appRoot,
     absolute: true,
-    onlyFiles: true
+    onlyFiles: true,
   });
 
   const routes: DiscoveredRoute[] = [];
@@ -42,29 +42,19 @@ export async function discoverRoutes(
       page: pageFile,
       layouts,
       loading: await findConventionFile(pageDir, "loading", extensions),
-      error: await findConventionFile(pageDir, "error", extensions)
+      error: await findConventionFile(pageDir, "error", extensions),
     });
   }
 
-  return routes.sort(
-    (left, right) => scoreRoute(right.routePath) - scoreRoute(left.routePath)
-  );
+  return routes.sort((left, right) => scoreRoute(right.routePath) - scoreRoute(left.routePath));
 }
 
-async function collectLayouts(
-  appRoot: string,
-  pageDir: string,
-  extensions: string[]
-) {
+async function collectLayouts(appRoot: string, pageDir: string, extensions: string[]) {
   const layouts: string[] = [];
   let currentDir = pageDir;
 
   while (currentDir.startsWith(appRoot)) {
-    const layoutFile = await findConventionFile(
-      currentDir,
-      "layout",
-      extensions
-    );
+    const layoutFile = await findConventionFile(currentDir, "layout", extensions);
 
     if (layoutFile) {
       layouts.unshift(layoutFile);
@@ -80,11 +70,7 @@ async function collectLayouts(
   return layouts;
 }
 
-async function findConventionFile(
-  dir: string,
-  basename: string,
-  extensions: string[]
-) {
+async function findConventionFile(dir: string, basename: string, extensions: string[]) {
   for (const extension of extensions) {
     const candidate = path.join(dir, `${basename}.${extension}`);
 

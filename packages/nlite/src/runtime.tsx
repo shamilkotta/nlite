@@ -6,7 +6,7 @@ import type {
   NliteRouteMatch,
   NliteRouteRecord,
   RenderingMode,
-  RouteParams
+  RouteParams,
 } from "./types.js";
 
 export type { NliteRouteMatch, NliteRouteRecord, RenderingMode, RouteParams };
@@ -27,13 +27,13 @@ export function createRouteRecord(input: {
     ...input,
     rendering,
     regex,
-    paramNames
+    paramNames,
   };
 }
 
 export function matchRoute(
   routes: NliteRouteRecord[],
-  pathname: string
+  pathname: string,
 ): NliteRouteMatch | undefined {
   for (const route of routes) {
     const match = pathname.match(new RegExp(route.regex));
@@ -57,10 +57,7 @@ export function matchRoute(
   return undefined;
 }
 
-export function createRouteElement(
-  route: NliteRouteRecord,
-  params: RouteParams
-) {
+export function createRouteElement(route: NliteRouteRecord, params: RouteParams) {
   let element = React.createElement(route.page.default, { params });
 
   for (const layout of [...route.layouts].reverse()) {
@@ -99,7 +96,7 @@ function compileRoutePath(routePath: string) {
   if (routePath === "/") {
     return {
       regex: "^/$",
-      paramNames: []
+      paramNames: [],
     };
   }
 
@@ -121,7 +118,7 @@ function compileRoutePath(routePath: string) {
 
   return {
     regex: `^/${regexSegments.join("/")}$`,
-    paramNames
+    paramNames,
   };
 }
 

@@ -6,17 +6,17 @@ export default defineConfig([
       index: "./src/index.ts",
       link: "./src/link.tsx",
       navigation: "./src/navigation.tsx",
-      runtime: "./src/runtime.tsx"
+      runtime: "./src/runtime.tsx",
     },
     dts: true,
     format: "esm",
     outDir: "dist",
     clean: true,
-    sourcemap: true
+    sourcemap: true,
   },
   {
     entry: {
-      nlite: "./src/bin/nlite.ts"
+      nlite: "./src/bin/nlite.ts",
     },
     platform: "node",
     format: "esm",
@@ -25,7 +25,7 @@ export default defineConfig([
     sourcemap: false,
     clean: true,
     outExtensions: () => ({
-      js: ".js"
-    })
-  }
+      js: ".js",
+    }),
+  },
 ]);

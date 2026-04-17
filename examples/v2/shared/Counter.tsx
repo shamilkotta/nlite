@@ -12,9 +12,7 @@ export default function Counter() {
   return (
     <>
       <p>Current pathname: {pathname}</p>
-      <button
-        className="counter"
-        onClick={() => setCount((value) => value + 1)}>
+      <button className="counter" onClick={() => setCount((value) => value + 1)}>
         Count: {count}
       </button>
       <button className="counter" onClick={() => router.push("/about")}>

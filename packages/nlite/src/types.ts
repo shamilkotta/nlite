@@ -1,6 +1,6 @@
 import type { ComponentType, ReactNode } from "react";
 
-export type RenderingMode = "ssr" | "ssg" | "csr";
+export type RenderingMode = "ssr" | "ssg";
 
 export interface RouteParams {
   [key: string]: string | string[];

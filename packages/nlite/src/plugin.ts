@@ -16,7 +16,7 @@ const RESOLVED_IDS = new Map([
   [VIRTUAL_MANIFEST_ID, `\0${VIRTUAL_MANIFEST_ID}`],
   [VIRTUAL_RSC_ENTRY_ID, `\0${VIRTUAL_RSC_ENTRY_ID}`],
   [VIRTUAL_SSR_ENTRY_ID, `\0${VIRTUAL_SSR_ENTRY_ID}`],
-  [VIRTUAL_BROWSER_ENTRY_ID, `\0${VIRTUAL_BROWSER_ENTRY_ID}`]
+  [VIRTUAL_BROWSER_ENTRY_ID, `\0${VIRTUAL_BROWSER_ENTRY_ID}`],
 ]);
 const INTERNAL_VIRTUAL_IDS = new Set(RESOLVED_IDS.values());
 
@@ -35,12 +35,8 @@ export function nlite(options: NliteOptions = {}): PluginOption[] {
       const appRoot = path.resolve(server.config.root, appDir);
 
       server.watcher.add(appRoot);
-      server.watcher.on("add", (file) =>
-        invalidateRoutes(server, appRoot, file)
-      );
-      server.watcher.on("unlink", (file) =>
-        invalidateRoutes(server, appRoot, file)
-      );
+      server.watcher.on("add", (file) => invalidateRoutes(server, appRoot, file));
+      server.watcher.on("unlink", (file) => invalidateRoutes(server, appRoot, file));
     },
     resolveId(id) {
       if (INTERNAL_VIRTUAL_IDS.has(id)) {
@@ -69,7 +65,7 @@ export function nlite(options: NliteOptions = {}): PluginOption[] {
       }
 
       return undefined;
-    }
+    },
   };
 
   return [
@@ -79,24 +75,18 @@ export function nlite(options: NliteOptions = {}): PluginOption[] {
       entries: {
         rsc: VIRTUAL_RSC_ENTRY_ID,
         ssr: VIRTUAL_SSR_ENTRY_ID,
-        client: VIRTUAL_BROWSER_ENTRY_ID
-      }
-    })
+        client: VIRTUAL_BROWSER_ENTRY_ID,
+      },
+    }),
   ];
 }
 
-function invalidateRoutes(
-  server: ViteDevServer,
-  appRoot: string,
-  file: string
-) {
+function invalidateRoutes(server: ViteDevServer, appRoot: string, file: string) {
   if (!file.startsWith(appRoot)) {
     return;
   }
 
-  const manifestModule = server.moduleGraph.getModuleById(
-    RESOLVED_IDS.get(VIRTUAL_MANIFEST_ID)!
-  );
+  const manifestModule = server.moduleGraph.getModuleById(RESOLVED_IDS.get(VIRTUAL_MANIFEST_ID)!);
 
   if (manifestModule) {
     server.moduleGraph.invalidateModule(manifestModule);
@@ -105,12 +95,8 @@ function invalidateRoutes(
   server.ws.send({ type: "full-reload" });
 }
 
-function buildManifestModule(
-  routes: Awaited<ReturnType<typeof discoverRoutes>>
-) {
-  const imports: string[] = [
-    'import { createRouteRecord } from "nlite/runtime";'
-  ];
+function buildManifestModule(routes: Awaited<ReturnType<typeof discoverRoutes>>) {
+  const imports: string[] = ['import { createRouteRecord } from "nlite/runtime";'];
   const records: string[] = [];
 
   routes.forEach((route, index) => {
@@ -121,9 +107,7 @@ function buildManifestModule(
     route.layouts.forEach((layoutFile, layoutIndex) => {
       const layoutVar = `layout${index}_${layoutIndex}`;
       layoutVars.push(layoutVar);
-      imports.push(
-        `import * as ${layoutVar} from ${JSON.stringify(layoutFile)};`
-      );
+      imports.push(`import * as ${layoutVar} from ${JSON.stringify(layoutFile)};`);
     });
 
     records.push(`createRouteRecord({
