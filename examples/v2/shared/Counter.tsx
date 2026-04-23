@@ -29,7 +29,7 @@ export const SmallCounter = () => {
   const [count, setCount] = useState(0);
   return (
     <button className="counter" onClick={() => setCount((value) => value + 1)}>
-      Count Small: {count}
+      Small: {count}
     </button>
   );
 };

@@ -2,7 +2,7 @@ import path from "node:path";
 
 import react from "@vitejs/plugin-react";
 import rsc from "@vitejs/plugin-rsc";
-import type { Plugin, PluginOption, ViteDevServer } from "vite";
+import type { ModuleNode, Plugin, PluginOption, ViteDevServer } from "vite";
 
 import { discoverRoutes } from "./fs-routes.js";
 import type { NliteOptions } from "./types.js";
@@ -22,7 +22,6 @@ const INTERNAL_VIRTUAL_IDS = new Set(RESOLVED_IDS.values());
 
 export function nlite(options: NliteOptions = {}): PluginOption[] {
   const appDir = options.appDir ?? "app";
-  const extensions = options.extensions ?? ["tsx", "ts", "jsx", "js"];
   let projectRoot = process.cwd();
 
   const frameworkPlugin: Plugin = {
@@ -37,6 +36,8 @@ export function nlite(options: NliteOptions = {}): PluginOption[] {
       server.watcher.add(appRoot);
       server.watcher.on("add", (file) => invalidateRoutes(server, appRoot, file));
       server.watcher.on("unlink", (file) => invalidateRoutes(server, appRoot, file));
+      server.watcher.on("addDir", (file) => invalidateRoutes(server, appRoot, file));
+      server.watcher.on("unlinkDir", (file) => invalidateRoutes(server, appRoot, file));
     },
     resolveId(id) {
       if (INTERNAL_VIRTUAL_IDS.has(id)) {
@@ -47,7 +48,7 @@ export function nlite(options: NliteOptions = {}): PluginOption[] {
     },
     async load(id) {
       if (id === RESOLVED_IDS.get(VIRTUAL_MANIFEST_ID)) {
-        const routes = await discoverRoutes(projectRoot, appDir, extensions);
+        const routes = await discoverRoutes(projectRoot, appDir);
 
         return buildManifestModule(routes);
       }
@@ -82,17 +83,59 @@ export function nlite(options: NliteOptions = {}): PluginOption[] {
 }
 
 function invalidateRoutes(server: ViteDevServer, appRoot: string, file: string) {
-  if (!file.startsWith(appRoot)) {
+  const relative = path.relative(appRoot, file);
+  const isWithinAppRoot =
+    relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative));
+
+  if (!isWithinAppRoot) {
     return;
   }
 
-  const manifestModule = server.moduleGraph.getModuleById(RESOLVED_IDS.get(VIRTUAL_MANIFEST_ID)!);
+  invalidateManifestModuleGraph(server.moduleGraph);
+  invalidateManifestInAllEnvironments(server);
+}
+
+function invalidateManifestModuleGraph(moduleGraph: {
+  getModuleById: (id: string) => ModuleNode | undefined;
+  invalidateModule: (mod: ModuleNode) => void;
+}) {
+  const manifestModule = moduleGraph.getModuleById(RESOLVED_IDS.get(VIRTUAL_MANIFEST_ID)!);
 
   if (manifestModule) {
-    server.moduleGraph.invalidateModule(manifestModule);
+    moduleGraph.invalidateModule(manifestModule);
+  }
+}
+
+function invalidateManifestInAllEnvironments(server: ViteDevServer) {
+  const environments = (server as { environments?: Record<string, unknown> }).environments;
+
+  if (!environments) {
+    return;
   }
 
-  server.ws.send({ type: "full-reload" });
+  for (const environment of Object.values(environments)) {
+    if (!environment || typeof environment !== "object" || !("moduleGraph" in environment)) {
+      continue;
+    }
+
+    const { moduleGraph } = environment as { moduleGraph?: unknown };
+
+    if (
+      !moduleGraph ||
+      typeof moduleGraph !== "object" ||
+      !("getModuleById" in moduleGraph) ||
+      !("invalidateModule" in moduleGraph)
+    ) {
+      continue;
+    }
+
+    invalidateManifestModuleGraph(
+      moduleGraph as {
+        getModuleById: (id: string) => ModuleNode | undefined;
+        invalidateModule: (mod: ModuleNode) => void;
+      },
+    );
+  }
 }
 
 function buildManifestModule(routes: Awaited<ReturnType<typeof discoverRoutes>>) {
@@ -103,19 +146,57 @@ function buildManifestModule(routes: Awaited<ReturnType<typeof discoverRoutes>>)
     const pageVar = `pageModule${index}`;
     imports.push(`import * as ${pageVar} from ${JSON.stringify(route.page)};`);
 
-    const layoutVars: string[] = [];
-    route.layouts.forEach((layoutFile, layoutIndex) => {
-      const layoutVar = `layout${index}_${layoutIndex}`;
-      layoutVars.push(layoutVar);
-      imports.push(`import * as ${layoutVar} from ${JSON.stringify(layoutFile)};`);
+    const treeVars: {
+      layout?: string;
+      loading?: string;
+      error?: string;
+    }[] = [];
+    route.tree.forEach((segment, segmentIndex) => {
+      const currentVar: (typeof treeVars)[number] = {};
+      if (segment.layout) {
+        const layoutVar = `layout${index}_${segmentIndex}`;
+        currentVar.layout = layoutVar;
+        imports.push(`import * as ${layoutVar} from ${JSON.stringify(segment.layout)};`);
+      }
+      if (segment.loading) {
+        const loadingVar = `loading${index}_${segmentIndex}`;
+        currentVar.loading = loadingVar;
+        imports.push(`import * as ${loadingVar} from ${JSON.stringify(segment.loading)};`);
+      }
+      if (segment.error) {
+        const errorVar = `error${index}_${segmentIndex}`;
+        currentVar.error = errorVar;
+        imports.push(`import * as ${errorVar} from ${JSON.stringify(segment.error)};`);
+      }
+      treeVars.push(currentVar);
     });
+
+    const treeRecord = treeVars
+      .map((segment) => {
+        const entries: string[] = [];
+
+        if (segment.layout) {
+          entries.push(`layout: ${segment.layout}`);
+        }
+        if (segment.loading) {
+          entries.push(`loading: ${segment.loading}`);
+        }
+        if (segment.error) {
+          entries.push(`error: ${segment.error}`);
+        }
+
+        return `{ ${entries.join(", ")} }`;
+      })
+      .join(",\n    ");
 
     records.push(`createRouteRecord({
   id: ${JSON.stringify(route.id)},
   routePath: ${JSON.stringify(route.routePath)},
   sourceFile: ${JSON.stringify(route.page)},
   page: ${pageVar},
-  layouts: [${layoutVars.join(", ")}]
+  tree: [
+    ${treeRecord}
+  ]
 })`);
   });
 

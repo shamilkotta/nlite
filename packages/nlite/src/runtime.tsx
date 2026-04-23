@@ -1,7 +1,8 @@
-import React from "react";
+import React, { Suspense } from "react";
 
+import { ErrorBoundary } from "./lib/ErrorBoundary.js";
 import type {
-  NliteLayoutModule,
+  NliteRouteSegmentModule,
   NlitePageModule,
   NliteRouteMatch,
   NliteRouteRecord,
@@ -16,9 +17,7 @@ export function createRouteRecord(input: {
   routePath: string;
   sourceFile: string;
   page: NlitePageModule;
-  layouts: NliteLayoutModule[];
-  loading?: unknown;
-  error?: unknown;
+  tree: NliteRouteSegmentModule[];
 }): NliteRouteRecord {
   const rendering = input.page.rendering ?? "ssr";
   const { regex, paramNames } = compileRoutePath(input.routePath);
@@ -58,10 +57,24 @@ export function matchRoute(
 }
 
 export function createRouteElement(route: NliteRouteRecord, params: RouteParams) {
-  let element = React.createElement(route.page.default, { params });
+  let element: React.ReactElement = React.createElement(route.page.default, { params });
 
-  for (const layout of [...route.layouts].reverse()) {
-    element = React.createElement(layout.default, { children: element, params });
+  for (const segment of [...route.tree].reverse()) {
+    if (segment.loading) {
+      element = React.createElement(Suspense, {
+        children: element,
+        fallback: React.createElement(segment.loading.default),
+      });
+    }
+    if (segment.error) {
+      element = React.createElement(ErrorBoundary, {
+        children: element,
+        FallbackComponent: segment.error.default,
+      });
+    }
+    if (segment.layout) {
+      element = React.createElement(segment.layout.default, { children: element, params });
+    }
   }
 
   return element;

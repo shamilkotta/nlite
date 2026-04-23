@@ -1,5 +1,7 @@
 import type { ComponentType, ReactNode } from "react";
 
+import type { ErrorBoundaryFallbackComponent } from "./lib/ErrorBoundary.js";
+
 export type RenderingMode = "ssr" | "ssg";
 
 export interface RouteParams {
@@ -12,8 +14,18 @@ export interface NlitePageModule {
   generateStaticParams?: () => RouteParams[] | Promise<RouteParams[]>;
 }
 
-export interface NliteLayoutModule {
+interface NliteModuleComponent {
   default: ComponentType<{ children: ReactNode; params: RouteParams }>;
+}
+
+export interface NliteRouteSegmentModule {
+  layout?: NliteModuleComponent;
+  loading?: {
+    default: ComponentType;
+  };
+  error?: {
+    default: ErrorBoundaryFallbackComponent;
+  };
 }
 
 export interface NliteRouteRecord {
@@ -21,9 +33,7 @@ export interface NliteRouteRecord {
   routePath: string;
   sourceFile: string;
   page: NlitePageModule;
-  layouts: NliteLayoutModule[];
-  loading?: unknown;
-  error?: unknown;
+  tree: NliteRouteSegmentModule[];
   rendering: RenderingMode;
   regex: string;
   paramNames: string[];
@@ -36,7 +46,6 @@ export interface NliteRouteMatch {
 
 export interface NliteOptions {
   appDir?: string;
-  extensions?: string[];
 }
 
 export interface NavigateOptions {

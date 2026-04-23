@@ -10,3 +10,10 @@ export type {
   RouterNavigateOptions,
   RouteParams,
 } from "./types.js";
+export {
+  ErrorBoundary,
+  type ErrorBoundaryProps,
+  type ErrorBoundaryFallbackProps,
+  type ErrorBoundaryFallbackComponent,
+  type ErrorBoundaryResetDetails,
+} from "./lib/ErrorBoundary.js";

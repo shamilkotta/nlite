@@ -1,15 +1,16 @@
 import { access } from "node:fs/promises";
 import path from "node:path";
 
+import { FILE_EXTENSIONS } from "./utils/constants.js";
 import { glob } from "tinyglobby";
-
-const DEFAULT_EXTENSIONS = ["tsx", "ts", "jsx", "js"];
 
 export interface RouteModuleFiles {
   page: string;
-  layouts: string[];
-  loading?: string;
-  error?: string;
+  tree: {
+    layout?: string;
+    loading?: string;
+    error?: string;
+  }[];
 }
 
 export interface DiscoveredRoute extends RouteModuleFiles {
@@ -17,13 +18,9 @@ export interface DiscoveredRoute extends RouteModuleFiles {
   routePath: string;
 }
 
-export async function discoverRoutes(
-  projectRoot: string,
-  appDir = "app",
-  extensions = DEFAULT_EXTENSIONS,
-) {
+export async function discoverRoutes(projectRoot: string, appDir = "app") {
   const appRoot = path.resolve(projectRoot, appDir);
-  const pagePattern = `**/page.{${extensions.join(",")}}`;
+  const pagePattern = `**/page.{${FILE_EXTENSIONS.join(",")}}`;
   const pageFiles = await glob(pagePattern, {
     cwd: appRoot,
     absolute: true,
@@ -34,31 +31,35 @@ export async function discoverRoutes(
 
   for (const pageFile of pageFiles.sort()) {
     const pageDir = path.dirname(pageFile);
-    const layouts = await collectLayouts(appRoot, pageDir, extensions);
+    const tree = await collectTree(appRoot, pageDir);
 
     routes.push({
       id: toPosix(path.relative(projectRoot, pageFile)),
       routePath: toRoutePath(appRoot, pageFile),
       page: pageFile,
-      layouts,
-      loading: await findConventionFile(pageDir, "loading", extensions),
-      error: await findConventionFile(pageDir, "error", extensions),
+      tree,
     });
   }
 
   return routes.sort((left, right) => scoreRoute(right.routePath) - scoreRoute(left.routePath));
 }
 
-async function collectLayouts(appRoot: string, pageDir: string, extensions: string[]) {
-  const layouts: string[] = [];
+async function collectTree(appRoot: string, pageDir: string) {
+  const tree = [];
   let currentDir = pageDir;
 
   while (currentDir.startsWith(appRoot)) {
-    const layoutFile = await findConventionFile(currentDir, "layout", extensions);
+    const layout = await findConventionFile(currentDir, "layout");
+    const loading = await findConventionFile(currentDir, "loading");
+    const error = await findConventionFile(currentDir, "error");
+    // TODO: not found file
 
-    if (layoutFile) {
-      layouts.unshift(layoutFile);
-    }
+    const currentSegement = {
+      layout,
+      loading,
+      error,
+    };
+    tree.unshift(currentSegement);
 
     if (currentDir === appRoot) {
       break;
@@ -67,11 +68,11 @@ async function collectLayouts(appRoot: string, pageDir: string, extensions: stri
     currentDir = path.dirname(currentDir);
   }
 
-  return layouts;
+  return tree;
 }
 
-async function findConventionFile(dir: string, basename: string, extensions: string[]) {
-  for (const extension of extensions) {
+async function findConventionFile(dir: string, basename: string) {
+  for (const extension of FILE_EXTENSIONS) {
     const candidate = path.join(dir, `${basename}.${extension}`);
 
     try {

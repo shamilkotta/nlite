@@ -4,9 +4,10 @@ export default defineConfig([
   {
     entry: {
       index: "./src/index.ts",
-      link: "./src/link.tsx",
-      navigation: "./src/navigation.tsx",
+      link: "./src/lib/link.tsx",
+      navigation: "./src/lib/navigation.tsx",
       runtime: "./src/runtime.tsx",
+      ErrorBoundary: "./src/lib/ErrorBoundary.tsx",
     },
     dts: true,
     format: "esm",
