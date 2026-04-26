@@ -1,5 +1,7 @@
 import React from "react";
 import { renderToReadableStream } from "@vitejs/plugin-rsc/rsc";
+import { prerender } from "@vitejs/plugin-rsc/vendor/react-server-dom/static.edge";
+import { createClientManifest } from "@vitejs/plugin-rsc/core/rsc";
 import routes from "virtual:nlite/routes";
 import { collectStaticPaths, createRouteElement, matchRoute } from "../runtime.js";
 import type { RscPayload } from "../types.js";
@@ -143,7 +145,7 @@ export async function handleSsg(request: Request) {
     rendering: "ssg",
   });
   const rscPayload = { root: documentNode };
-  const rscStream = renderToReadableStream<RscPayload>(rscPayload);
+  const { prelude: rscStream } = await prerender<RscPayload>(rscPayload, createClientManifest());
   const [rscStream1, rscStream2] = rscStream.tee();
   const ssrEntry = await import.meta.viteRsc.loadModule<typeof import("./entry.ssr.ts")>(
     "ssr",

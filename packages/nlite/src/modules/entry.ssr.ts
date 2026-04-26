@@ -5,9 +5,7 @@ import { prerender } from "react-dom/static.edge";
 import type { RscPayload } from "../types.js";
 
 export async function renderHtml(rscStream: ReadableStream, _options: { ssg: boolean }) {
-  const [rscStream1, rscStream2] = _options?.ssg
-    ? await prepareRscStreams(rscStream) // I don't know why this, GPT told me to do this since the prerender was failing
-    : rscStream.tee();
+  const [rscStream1, rscStream2] = rscStream.tee();
   let payload: Promise<RscPayload>;
   function SsrRoot() {
     payload ??= createFromReadableStream<RscPayload>(rscStream1);
@@ -21,12 +19,6 @@ export async function renderHtml(rscStream: ReadableStream, _options: { ssg: boo
     // for static site generation, let errors throw to fail the build
     const prerenderResult = await prerender(createElement(SsrRoot), {
       bootstrapScriptContent,
-
-      onError: (error, errorInfo) => {
-        console.error(error);
-        console.log({ errorInfo: errorInfo.componentStack });
-        console.error("[NLITE] SSG prerender failed", error);
-      },
     });
     htmlStream = prerenderResult.prelude;
   } else {
@@ -178,70 +170,4 @@ function serializeInlineScriptValue(value: unknown) {
     .replace(/</g, "\\u003C")
     .replace(/\u2028/g, "\\u2028")
     .replace(/\u2029/g, "\\u2029");
-}
-
-async function prepareRscStreams(rscStream: ReadableStream) {
-  const chunks = await readStreamChunks(rscStream);
-  await preloadClientReferences(chunks);
-
-  return [streamFromChunks(chunks), streamFromChunks(chunks)] as const;
-}
-
-async function readStreamChunks(rscStream: ReadableStream) {
-  const reader = rscStream.getReader();
-  const chunks: Uint8Array[] = [];
-
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) {
-      return chunks;
-    }
-
-    chunks.push(value);
-  }
-}
-
-async function preloadClientReferences(chunks: Uint8Array[]) {
-  const clientRequire = (
-    globalThis as typeof globalThis & {
-      __vite_rsc_client_require__?: (id: string) => unknown;
-    }
-  ).__vite_rsc_client_require__;
-
-  if (!clientRequire) {
-    return;
-  }
-
-  const ids = new Set<string>();
-  const text = new TextDecoder().decode(concatChunks(chunks));
-  for (const match of text.matchAll(/:I(\[[^\n]+\])/g)) {
-    const metadata = JSON.parse(match[1]!) as [string, ...unknown[]];
-    ids.add(metadata[0]);
-  }
-
-  await Promise.all([...ids].map((id) => clientRequire(id)));
-}
-
-function streamFromChunks(chunks: Uint8Array[]) {
-  return new ReadableStream<Uint8Array>({
-    start(controller) {
-      for (const chunk of chunks) {
-        controller.enqueue(chunk);
-      }
-      controller.close();
-    },
-  });
-}
-
-function concatChunks(chunks: Uint8Array[]) {
-  const size = chunks.reduce((total, chunk) => total + chunk.byteLength, 0);
-  const output = new Uint8Array(size);
-  let offset = 0;
-
-  for (const chunk of chunks) {
-    output.set(chunk, offset);
-    offset += chunk.byteLength;
-  }
-
-  return output;
 }

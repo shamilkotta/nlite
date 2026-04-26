@@ -39,7 +39,7 @@ async function renderStatic(config: ResolvedConfig) {
   }
 
   const staticPaths = normalizePaths(await entry.collectPrerenderPaths());
-  const outDir = path.resolve(config.build.outDir);
+  const outDir = path.resolve(config.environments.client.build.outDir);
 
   for (const routePath of staticPaths) {
     const request = new Request(new URL(routePath, "http://nlite.local"));
@@ -70,15 +70,15 @@ function normalizeHtmlFilePath(routePath: string) {
     return "index.html";
   }
 
-  return path.join(routePath.slice(1), "index.html");
+  return routePath.slice(1) + ".html";
 }
 
 function normalizeRscFilePath(routePath: string) {
   if (routePath === "/") {
-    return RSC_POSTFIX;
+    return "index" + RSC_POSTFIX;
   }
 
-  return `${routePath.slice(1)}${RSC_POSTFIX}`;
+  return routePath.slice(1) + RSC_POSTFIX;
 }
 
 async function writeStreamToFile(filePath: string, stream: ReadableStream<Uint8Array>) {

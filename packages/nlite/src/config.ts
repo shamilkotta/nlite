@@ -14,7 +14,7 @@ export interface NliteUserConfig extends UserConfig {
   nlite?: NliteOptions;
 }
 
-export function defineConfig(config: UserConfigExport) {
+export function defineConfig(config: NliteUserConfig) {
   return defineViteConfig(async (env) => {
     const resolved = await resolveConfig(config, env);
     return withNlitePlugin(resolved);
@@ -38,6 +38,6 @@ function withNlitePlugin(config: NliteUserConfig) {
 
   return mergeConfig(rest, {
     customLogger,
-    plugins: [...nlite(nliteOptions), ...plugins],
+    plugins: [...nlite(nliteOptions), ...plugins], // TODO: @cloudflare/vite-plugin
   });
 }
