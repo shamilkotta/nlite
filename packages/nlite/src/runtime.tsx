@@ -1,6 +1,6 @@
 import React, { Suspense } from "react";
 
-import { ErrorBoundary } from "./lib/ErrorBoundary.js";
+import { ErrorBoundary } from "nlite";
 import type {
   NliteRouteSegmentModule,
   NlitePageModule,
@@ -56,8 +56,15 @@ export function matchRoute(
   return undefined;
 }
 
-export function createRouteElement(route: NliteRouteRecord, params: RouteParams) {
-  let element: React.ReactElement = React.createElement(route.page.default, { params });
+export function createRouteElement(
+  route: NliteRouteRecord,
+  params: RouteParams,
+  searchParams: URLSearchParams = new URLSearchParams(),
+) {
+  let element: React.ReactElement = React.createElement(route.page.default, {
+    params: Promise.resolve(params),
+    searchParams: Promise.resolve(searchParams),
+  });
 
   for (const segment of [...route.tree].reverse()) {
     if (segment.loading) {
@@ -73,7 +80,11 @@ export function createRouteElement(route: NliteRouteRecord, params: RouteParams)
       });
     }
     if (segment.layout) {
-      element = React.createElement(segment.layout.default, { children: element, params });
+      element = React.createElement(segment.layout.default, {
+        children: element,
+        params: Promise.resolve(params),
+        searchParams: Promise.resolve(searchParams),
+      });
     }
   }
 

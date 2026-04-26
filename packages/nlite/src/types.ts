@@ -1,6 +1,6 @@
 import type { ComponentType, ReactNode } from "react";
 
-import type { ErrorBoundaryFallbackComponent } from "./lib/ErrorBoundary.js";
+import type { ErrorBoundaryFallbackComponent } from "./lib/errorBoundary.js";
 
 export type RenderingMode = "ssr" | "ssg";
 
@@ -8,14 +8,25 @@ export interface RouteParams {
   [key: string]: string | string[];
 }
 
+export interface RscPayload {
+  root: React.ReactNode;
+}
+
 export interface NlitePageModule {
-  default: ComponentType<{ params: RouteParams }>;
+  default: ComponentType<{
+    params: Promise<RouteParams>;
+    searchParams: Promise<URLSearchParams>;
+  }>;
   rendering?: RenderingMode;
   generateStaticParams?: () => RouteParams[] | Promise<RouteParams[]>;
 }
 
 interface NliteModuleComponent {
-  default: ComponentType<{ children: ReactNode; params: RouteParams }>;
+  default: ComponentType<{
+    children: ReactNode;
+    params: Promise<RouteParams>;
+    searchParams: Promise<URLSearchParams>;
+  }>;
 }
 
 export interface NliteRouteSegmentModule {
@@ -66,6 +77,18 @@ export interface NliteRouter {
 }
 
 declare global {
+  interface ImportMeta {
+    viteRsc: {
+      loadCss: () => ReactNode;
+      loadModule: <TModule>(target: string, entry: string) => Promise<TModule>;
+      loadBootstrapScriptContent: (entry: string) => Promise<string>;
+    };
+    hot?: {
+      accept: () => void;
+      on: (event: string, callback: (...args: unknown[]) => void) => void;
+    };
+  }
+
   interface Window {
     __NLITE_DATA__?: {
       pathname: string;

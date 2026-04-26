@@ -4,12 +4,18 @@ export default defineConfig([
   {
     entry: {
       index: "./src/index.ts",
-      link: "./src/lib/link.tsx",
-      navigation: "./src/lib/navigation.tsx",
+      "lib/link": "./src/lib/link.tsx",
+      "lib/navigation": "./src/lib/navigation.tsx",
       runtime: "./src/runtime.tsx",
-      ErrorBoundary: "./src/lib/ErrorBoundary.tsx",
+      "lib/errorBoundary": "./src/lib/errorBoundary.tsx",
+      "modules/entry.rsc": "./src/modules/entry.rsc.ts",
+      "modules/entry.ssr": "./src/modules/entry.ssr.ts",
+      "modules/entry.browser": "./src/modules/entry.browser.ts",
     },
     dts: true,
+    deps: {
+      neverBundle: ["virtual:nlite/routes", "nlite"],
+    },
     format: "esm",
     outDir: "dist",
     clean: true,

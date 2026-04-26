@@ -5,7 +5,7 @@ import { startTransition, useSyncExternalStore } from "react";
 import { createFromFetch, createFromReadableStream } from "@vitejs/plugin-rsc/browser";
 import { hydrateRoot, type Root } from "react-dom/client";
 
-import type { NliteRouter, RouterNavigateOptions } from "./types.js";
+import type { NliteRouter, RouterNavigateOptions, RscPayload } from "../types.js";
 
 interface NavigationSnapshot {
   pathname: string;
@@ -49,12 +49,12 @@ const router: NliteRouter = {
 
 export async function bootNavigation() {
   const inlineStream = window.__NLITE_READ_RSC__?.();
-  const root = inlineStream
+  const payload = inlineStream
     ? await createFromReadableStream(inlineStream)
     : await fetchRouteTree(new URL(window.location.href));
 
   navigationSnapshot = readSnapshot();
-  navigationRoot = hydrateRoot(document, root);
+  navigationRoot = hydrateRoot(document, (payload as RscPayload).root);
 
   window.addEventListener("popstate", () => {
     void renderUrl(new URL(window.location.href), {
@@ -138,7 +138,7 @@ async function renderUrl(
   emit();
 
   startTransition(() => {
-    navigationRoot?.render(nextRoot);
+    navigationRoot?.render((nextRoot as RscPayload).root);
   });
 
   if (options.scroll) {

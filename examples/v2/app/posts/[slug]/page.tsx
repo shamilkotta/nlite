@@ -1,14 +1,16 @@
-export const rendering = "ssg";
+// export const rendering = "ssg";
 
 export async function generateStaticParams() {
   return [{ slug: "hello-vite" }, { slug: "second-post" }];
 }
 
-export default function PostPage({ params }: { params: { slug: string } }) {
+export default async function PostPage({ params }: { params: Promise<{ slug: string }> }) {
+  const { slug } = await params;
+
   return (
     <article className="stack">
       <p className="eyebrow">Dynamic route</p>
-      <h1>{params.slug}</h1>
+      <h1>{slug}</h1>
       <p>
         This route already exposes the metadata needed for static generation in a later build step.
       </p>

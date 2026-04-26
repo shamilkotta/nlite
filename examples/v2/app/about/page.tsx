@@ -1,6 +1,8 @@
 import { ErrorBoundary } from "nlite";
 import AboutError from "./error";
 
+export const rendering = "ssg";
+
 export default async function AboutPage() {
   await new Promise((resolve) => setTimeout(resolve, 5000));
   console.log("This should be logged after 5 seconds in server");

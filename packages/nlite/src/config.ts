@@ -1,4 +1,5 @@
 import {
+  createLogger,
   defineConfig as defineViteConfig,
   mergeConfig,
   type ConfigEnv,
@@ -30,10 +31,13 @@ async function resolveConfig(config: UserConfigExport, env: ConfigEnv) {
   return (await config) as NliteUserConfig;
 }
 
+const customLogger = createLogger("info", { prefix: "[NLITE]" });
+
 function withNlitePlugin(config: NliteUserConfig) {
   const { nlite: nliteOptions, plugins = [], ...rest } = config;
 
   return mergeConfig(rest, {
+    customLogger,
     plugins: [...nlite(nliteOptions), ...plugins],
   });
 }

@@ -17,16 +17,12 @@
       "import": "./dist/index.mjs"
     },
     "./link": {
-      "types": "./dist/link.d.mts",
-      "import": "./dist/link.mjs"
+      "types": "./dist/lib/link.d.mts",
+      "import": "./dist/lib/link.mjs"
     },
     "./navigation": {
-      "types": "./dist/navigation.d.mts",
-      "import": "./dist/navigation.mjs"
-    },
-    "./runtime": {
-      "types": "./dist/runtime.d.mts",
-      "import": "./dist/runtime.mjs"
+      "types": "./dist/lib/navigation.d.mts",
+      "import": "./dist/lib/navigation.mjs"
     },
     "./package.json": "./package.json"
   },
