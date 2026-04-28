@@ -77,18 +77,6 @@ export interface NliteRouter {
 }
 
 declare global {
-  interface ImportMeta {
-    viteRsc: {
-      loadCss: () => ReactNode;
-      loadModule: <TModule>(target: string, entry: string) => Promise<TModule>;
-      loadBootstrapScriptContent: (entry: string) => Promise<string>;
-    };
-    hot?: {
-      accept: () => void;
-      on: (event: string, callback: (...args: unknown[]) => void) => void;
-    };
-  }
-
   interface Window {
     __NLITE_DATA__?: {
       pathname: string;

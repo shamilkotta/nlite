@@ -9,7 +9,8 @@
     "strict": true,
     "jsx": "react-jsx",
     "esModuleInterop": true,
-    "skipLibCheck": true
+    "skipLibCheck": true,
+    "types": ["vite/client", "@vitejs/plugin-rsc/types"]
   },
   "include": ["src"]
 }

@@ -26,10 +26,20 @@ export function nlite(options: NliteOptions = {}): PluginOption[] {
   const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
   const frameworkPlugin: Plugin = {
-    name: "nlite:v2",
+    name: "nlite",
     enforce: "pre",
     configResolved(config) {
       projectRoot = config.root;
+    },
+    configEnvironment(_name, config) {
+      if (config.optimizeDeps?.include) {
+        config.optimizeDeps.include = config.optimizeDeps.include.map((entry) => {
+          if (entry.startsWith("@vitejs/plugin-rsc")) {
+            entry = `nlite > ${entry}`;
+          }
+          return entry;
+        });
+      }
     },
     configureServer(server) {
       const appRoot = path.resolve(server.config.root, appDir);

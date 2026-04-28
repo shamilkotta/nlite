@@ -3,8 +3,7 @@ import path from "node:path";
 import { Readable } from "node:stream";
 import { pathToFileURL } from "node:url";
 import type { ConfigEnv, Plugin, ResolvedConfig, UserConfig } from "vite";
-
-const RSC_POSTFIX = ".rsc";
+import { normalizeHtmlFilePath, normalizeRoutePath, normalizeRscFilePath } from "./utils/path.js";
 
 export function prerender(): Plugin {
   return {
@@ -15,7 +14,7 @@ export function prerender(): Plugin {
         return {
           appType: env.isPreview ? "mpa" : undefined,
           rsc: {
-            serverHandler: env.isPreview ? false : undefined,
+            serverHandler: undefined,
           },
         };
       },
@@ -54,31 +53,6 @@ function normalizePaths(paths: string[]) {
   return [...new Set(paths)]
     .map((routePath) => normalizeRoutePath(routePath))
     .sort((left, right) => left.localeCompare(right));
-}
-
-function normalizeRoutePath(routePath: string) {
-  if (!routePath || routePath === "/") {
-    return "/";
-  }
-
-  const withLeadingSlash = routePath.startsWith("/") ? routePath : `/${routePath}`;
-  return withLeadingSlash.endsWith("/") ? withLeadingSlash.slice(0, -1) : withLeadingSlash;
-}
-
-function normalizeHtmlFilePath(routePath: string) {
-  if (routePath === "/") {
-    return "index.html";
-  }
-
-  return routePath.slice(1) + ".html";
-}
-
-function normalizeRscFilePath(routePath: string) {
-  if (routePath === "/") {
-    return "index" + RSC_POSTFIX;
-  }
-
-  return routePath.slice(1) + RSC_POSTFIX;
 }
 
 async function writeStreamToFile(filePath: string, stream: ReadableStream<Uint8Array>) {

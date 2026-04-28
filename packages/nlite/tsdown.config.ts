@@ -1,6 +1,6 @@
-import { defineConfig } from "tsdown";
+import { defineConfig, type UserConfig } from "tsdown";
 
-export default defineConfig([
+export default defineConfig((_opt): UserConfig[] => [
   {
     entry: {
       index: "./src/index.ts",
@@ -19,7 +19,7 @@ export default defineConfig([
     format: "esm",
     outDir: "dist",
     clean: true,
-    sourcemap: true,
+    sourcemap: _opt.watch ? true : false,
   },
   {
     entry: {
