@@ -1,6 +1,12 @@
 import Counter from "../shared/Counter";
 
-export default function HomePage() {
+export const rendering = "ssg";
+
+export default async function HomePage() {
+  const data = await new Promise<string>((resolve) =>
+    setTimeout(() => resolve("new Data name"), 3000),
+  );
+
   return (
     <section className="hero">
       <p className="eyebrow">Vite-first framework experiment</p>
@@ -8,7 +14,7 @@ export default function HomePage() {
       <p>
         This page is rendered as an RSC/SSR route, while the counter remains a client component.
       </p>
-      <h1>Hello </h1>
+      <h1>Hello {data}</h1>
       <Counter />
     </section>
   );

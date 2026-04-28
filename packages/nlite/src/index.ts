@@ -1,4 +1,3 @@
-export { nlite } from "./plugin.js";
 export { defineConfig, mergeConfig } from "./config.js";
 export type {
   NliteRouter,

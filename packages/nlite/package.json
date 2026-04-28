@@ -9,6 +9,7 @@
     "dist"
   ],
   "type": "module",
+  "sideEffects": false,
   "main": "./dist/index.mjs",
   "types": "./dist/index.d.mts",
   "exports": {
@@ -33,7 +34,8 @@
   "dependencies": {
     "@vitejs/plugin-react": "^6.0.1",
     "@vitejs/plugin-rsc": "^0.5.23",
-    "tinyglobby": "^0.2.16"
+    "tinyglobby": "^0.2.16",
+    "vite": "^8.0.8"
   },
   "devDependencies": {
     "@types/node": "^24.8.1",
@@ -44,7 +46,6 @@
   },
   "peerDependencies": {
     "react": "^19.2.5",
-    "react-dom": "^19.2.5",
-    "vite": "^8.0.8"
+    "react-dom": "^19.2.5"
   }
 }

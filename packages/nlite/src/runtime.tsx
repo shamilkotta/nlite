@@ -1,6 +1,6 @@
 import React, { Suspense } from "react";
 
-import { ErrorBoundary } from "nlite";
+import { ErrorBoundary } from "./lib/errorBoundary.js";
 import type {
   NliteRouteSegmentModule,
   NlitePageModule,

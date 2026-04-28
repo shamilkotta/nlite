@@ -1,5 +1,4 @@
 import path from "node:path";
-import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 
 import react from "@vitejs/plugin-react";
@@ -13,17 +12,14 @@ import { prerender } from "./prerender.plugin.js";
 const VIRTUAL_MANIFEST_ID = "virtual:nlite/routes";
 const VIRTUAL_RUNTIME_ID = "virtual:nlite/runtime";
 
-const RESOLVED_IDS = new Map([
-  [VIRTUAL_MANIFEST_ID, `\0${VIRTUAL_MANIFEST_ID}`],
-  [VIRTUAL_RUNTIME_ID, `\0${VIRTUAL_RUNTIME_ID}`],
-]);
-const INTERNAL_VIRTUAL_IDS = new Set(RESOLVED_IDS.values());
+const RESOLVED_MANIFEST_ID = `\0${VIRTUAL_MANIFEST_ID}`;
 
 export function nlite(options: NliteOptions = {}): PluginOption[] {
   const appDir = options.appDir ?? "app";
   let projectRoot = process.cwd();
 
   const __dirname = path.dirname(fileURLToPath(import.meta.url));
+  const runtimeId = path.join(__dirname, "runtime.mjs");
 
   const frameworkPlugin: Plugin = {
     name: "nlite",
@@ -51,21 +47,25 @@ export function nlite(options: NliteOptions = {}): PluginOption[] {
       server.watcher.on("unlinkDir", (file) => invalidateRoutes(server, appRoot, file));
     },
     resolveId(id) {
-      if (INTERNAL_VIRTUAL_IDS.has(id)) {
+      if (id === RESOLVED_MANIFEST_ID || id === runtimeId) {
         return id;
       }
 
-      return RESOLVED_IDS.get(id);
+      if (id === VIRTUAL_MANIFEST_ID) {
+        return RESOLVED_MANIFEST_ID;
+      }
+
+      if (id === VIRTUAL_RUNTIME_ID) {
+        return runtimeId;
+      }
+
+      return undefined;
     },
     async load(id) {
-      if (id === RESOLVED_IDS.get(VIRTUAL_MANIFEST_ID)) {
+      if (id === RESOLVED_MANIFEST_ID) {
         const routes = await discoverRoutes(projectRoot, appDir);
 
         return buildManifestModule(routes);
-      }
-
-      if (id === RESOLVED_IDS.get(VIRTUAL_RUNTIME_ID)) {
-        return await readFile(path.join(__dirname, "runtime.mjs"), "utf8");
       }
 
       return undefined;
@@ -103,7 +103,7 @@ function invalidateManifestModuleGraph(moduleGraph: {
   getModuleById: (id: string) => ModuleNode | undefined;
   invalidateModule: (mod: ModuleNode) => void;
 }) {
-  const manifestModule = moduleGraph.getModuleById(RESOLVED_IDS.get(VIRTUAL_MANIFEST_ID)!);
+  const manifestModule = moduleGraph.getModuleById(RESOLVED_MANIFEST_ID);
 
   if (manifestModule) {
     moduleGraph.invalidateModule(manifestModule);
