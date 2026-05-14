@@ -6,11 +6,10 @@ import type {
   NlitePageModule,
   NliteRouteMatch,
   NliteRouteRecord,
-  RenderingMode,
   RouteParams,
 } from "./types.js";
 
-export type { NliteRouteMatch, NliteRouteRecord, RenderingMode, RouteParams };
+export type { NliteRouteMatch, NliteRouteRecord, RouteParams };
 
 export function createRouteRecord(input: {
   id: string;
@@ -19,12 +18,10 @@ export function createRouteRecord(input: {
   page: NlitePageModule;
   tree: NliteRouteSegmentModule[];
 }): NliteRouteRecord {
-  const rendering = input.page.rendering ?? "ssr";
   const { regex, paramNames } = compileRoutePath(input.routePath);
 
   return {
     ...input,
-    rendering,
     regex,
     paramNames,
   };
@@ -91,31 +88,6 @@ export function createRouteElement(
   return element;
 }
 
-export async function collectStaticPaths(routes: NliteRouteRecord[]) {
-  const output: string[] = [];
-
-  for (const route of routes) {
-    if (route.rendering !== "ssg") {
-      continue;
-    }
-
-    const generator = route.page.generateStaticParams;
-
-    if (!generator) {
-      output.push(route.routePath);
-      continue;
-    }
-
-    const paramsList = await generator();
-
-    for (const params of paramsList) {
-      output.push(interpolateRoutePath(route.routePath, params));
-    }
-  }
-
-  return output;
-}
-
 function compileRoutePath(routePath: string) {
   if (routePath === "/") {
     return {
@@ -144,31 +116,6 @@ function compileRoutePath(routePath: string) {
     regex: `^/${regexSegments.join("/")}$`,
     paramNames,
   };
-}
-
-function interpolateRoutePath(routePath: string, params: RouteParams) {
-  if (routePath === "/") {
-    return "/";
-  }
-
-  const segments = routePath.split("/").filter(Boolean);
-
-  return `/${segments
-    .map((segment) => {
-      if (segment.startsWith(":")) {
-        return encodeURIComponent(String(params[segment.slice(1)] ?? ""));
-      }
-
-      if (segment.startsWith("*")) {
-        const value = params[segment.slice(1)];
-        return Array.isArray(value)
-          ? value.map((item) => encodeURIComponent(item)).join("/")
-          : encodeURIComponent(String(value ?? ""));
-      }
-
-      return segment;
-    })
-    .join("/")}`;
 }
 
 function escapeRegex(value: string) {

@@ -1,4 +1,5 @@
-export const RSC_POSTFIX = ".rsc";
+import { RSC_POSTFIX, POSTPONED_POSTFIX } from "./constants.js";
+
 export function normalizeRoutePath(routePath: string) {
   if (!routePath || routePath === "/") {
     return "/";
@@ -22,4 +23,12 @@ export function normalizeRscFilePath(routePath: string) {
   }
 
   return routePath.slice(1) + RSC_POSTFIX;
+}
+
+export function normalizePostponedFilePath(routePath: string) {
+  if (routePath === "/") {
+    return "index" + POSTPONED_POSTFIX;
+  }
+
+  return routePath.slice(1) + POSTPONED_POSTFIX;
 }

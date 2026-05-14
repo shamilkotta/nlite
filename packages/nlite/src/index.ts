@@ -5,7 +5,6 @@ export type {
   NliteOptions,
   NliteRouteMatch,
   NliteRouteRecord,
-  RenderingMode,
   RouterNavigateOptions,
   RouteParams,
 } from "./types.js";
