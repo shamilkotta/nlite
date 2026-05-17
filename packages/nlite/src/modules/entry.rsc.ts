@@ -56,13 +56,6 @@ export default async function handler(request: Request) {
     });
   }
 
-  if (import.meta.env.PROD && match.route.rendering === "ssg") {
-    const prerenderedResponse = await loadPrerenderedRoute(renderRequest);
-    if (prerenderedResponse) {
-      return prerenderedResponse;
-    }
-  }
-
   const app = createRouteElement(match.route, match.params, url.searchParams);
   const documentNode = React.createElement(Document, {
     children: app,

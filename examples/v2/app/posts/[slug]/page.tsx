@@ -6,7 +6,7 @@ export async function generateStaticParams() {
 
 export default async function PostPage({ params }: { params: Promise<{ slug: string }> }) {
   const data = await new Promise<string>((resolve) =>
-    setTimeout(() => resolve("new Data name"), 3000),
+    setTimeout(() => resolve(new Date().toLocaleTimeString()), 3000),
   );
   const { slug } = await params;
 
@@ -14,7 +14,7 @@ export default async function PostPage({ params }: { params: Promise<{ slug: str
     <article className="stack">
       <p className="eyebrow">Dynamic route</p>
       <h1>
-        {slug} {data}
+        {slug} @ {data}
       </h1>
       <p>
         This route already exposes the metadata needed for static generation in a later build step.

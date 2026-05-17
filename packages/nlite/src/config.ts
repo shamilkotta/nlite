@@ -38,6 +38,27 @@ function withNlitePlugin(config: NliteUserConfig) {
 
   return mergeConfig(rest, {
     customLogger,
-    plugins: [...nlite(nliteOptions), ...plugins], // TODO: @cloudflare/vite-plugin
+    build: {
+      outDir: ".nlite",
+      emptyOutDir: true,
+    },
+    environments: {
+      client: {
+        build: {
+          outDir: ".nlite/client",
+        },
+      },
+      ssr: {
+        build: {
+          outDir: ".nlite/server/ssr",
+        },
+      },
+      rsc: {
+        build: {
+          outDir: ".nlite/server",
+        },
+      },
+    },
+    plugins: [...plugins, ...nlite(nliteOptions)],
   });
 }

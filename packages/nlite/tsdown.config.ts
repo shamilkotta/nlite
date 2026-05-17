@@ -11,6 +11,7 @@ export default defineConfig((_opt): UserConfig[] => [
       "modules/entry.rsc": "./src/modules/entry.rsc.ts",
       "modules/entry.ssr": "./src/modules/entry.ssr.ts",
       "modules/entry.browser": "./src/modules/entry.browser.ts",
+      adapters: "./src/adapters/index.ts",
     },
     dts: true,
     deps: {
