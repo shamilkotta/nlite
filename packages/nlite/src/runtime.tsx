@@ -4,6 +4,7 @@ import { ErrorBoundary } from "./lib/errorBoundary.js";
 import type {
   NliteRouteSegmentModule,
   NlitePageModule,
+  PrerenderPath,
   NliteRouteMatch,
   NliteRouteRecord,
   RenderingMode,
@@ -19,7 +20,7 @@ export function createRouteRecord(input: {
   page: NlitePageModule;
   tree: NliteRouteSegmentModule[];
 }): NliteRouteRecord {
-  const rendering = input.page.rendering ?? "ssr";
+  const rendering = input.page.rendering;
   const { regex, paramNames } = compileRoutePath(input.routePath);
 
   return {
@@ -92,24 +93,30 @@ export function createRouteElement(
 }
 
 export async function collectStaticPaths(routes: NliteRouteRecord[]) {
-  const output: string[] = [];
+  const output: PrerenderPath[] = [];
 
   for (const route of routes) {
-    if (route.rendering !== "ssg") {
+    if (route.rendering === "force-ssr") {
       continue;
     }
 
     const generator = route.page.generateStaticParams;
 
     if (!generator) {
-      output.push(route.routePath);
+      output.push({
+        path: route.routePath,
+        forcePrerender: route.rendering === "force-ssg",
+      });
       continue;
     }
 
     const paramsList = await generator();
 
     for (const params of paramsList) {
-      output.push(interpolateRoutePath(route.routePath, params));
+      output.push({
+        path: interpolateRoutePath(route.routePath, params),
+        forcePrerender: true,
+      });
     }
   }
 

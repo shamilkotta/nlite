@@ -9,6 +9,10 @@ declare module "@vitejs/plugin-rsc/vendor/react-server-dom/static.edge" {
   export function prerender<TModel>(
     model: TModel,
     clientManifest: ReturnType<typeof import("@vitejs/plugin-rsc/core/rsc").createClientManifest>,
+    options: {
+      signal?: AbortSignal;
+      onError(error: unknown, erroStack: object): void;
+    },
   ): Promise<{
     prelude: ReadableStream;
   }>;

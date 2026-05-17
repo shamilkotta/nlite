@@ -2,10 +2,15 @@ import type { ComponentType, ReactNode } from "react";
 
 import type { ErrorBoundaryFallbackComponent } from "./lib/errorBoundary.js";
 
-export type RenderingMode = "ssr" | "ssg";
+export type RenderingMode = "force-ssg" | "force-ssr";
 
 export interface RouteParams {
   [key: string]: string | string[];
+}
+
+export interface PrerenderPath {
+  path: string;
+  forcePrerender: boolean;
 }
 
 export interface RscPayload {
@@ -45,7 +50,7 @@ export interface NliteRouteRecord {
   sourceFile: string;
   page: NlitePageModule;
   tree: NliteRouteSegmentModule[];
-  rendering: RenderingMode;
+  rendering?: RenderingMode;
   regex: string;
   paramNames: string[];
 }
@@ -80,7 +85,6 @@ declare global {
   interface Window {
     __NLITE_DATA__?: {
       pathname: string;
-      rendering: RenderingMode;
     };
     __NLITE_READ_RSC__?: () => ReadableStream<Uint8Array>;
     __NLITE_PUSH_RSC__?: (chunk: string) => void;

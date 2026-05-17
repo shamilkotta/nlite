@@ -1,8 +1,10 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { spawn } from "node:child_process";
 import { Readable } from "node:stream";
 import { pathToFileURL } from "node:url";
 import type { ConfigEnv, Plugin, ResolvedConfig, UserConfig } from "vite";
+import type { PrerenderPath } from "./types.js";
 import { normalizeHtmlFilePath, normalizeRoutePath, normalizeRscFilePath } from "./utils/path.js";
 
 export function prerender(): Plugin {
@@ -33,29 +35,107 @@ async function renderStatic(config: ResolvedConfig) {
     /* @vite-ignore */ pathToFileURL(entryPath).href
   );
 
-  if (!entry.collectPrerenderPaths || !entry.handleSsg) {
+  if (!entry.collectPrerenderPaths || !entry.handlePrerender) {
     return;
   }
 
   const staticPaths = normalizePaths(await entry.collectPrerenderPaths());
   const outDir = path.resolve(config.environments.client.build.outDir);
 
-  for (const routePath of staticPaths) {
+  for (const { path: routePath, forcePrerender } of staticPaths) {
     const request = new Request(new URL(routePath, "http://nlite.local"));
-    const { stream: html, rsc } = await entry.handleSsg(request);
+    const shouldPrerender = forcePrerender || (await probePrerenderRoute(entryPath, routePath));
+    if (!shouldPrerender) continue;
 
-    await writeStreamToFile(path.join(outDir, normalizeHtmlFilePath(routePath)), html);
-    await writeStreamToFile(path.join(outDir, normalizeRscFilePath(routePath)), rsc);
+    const { rsc, stream, skip } = await entry.handlePrerender(request);
+    if (skip) continue;
+
+    await Promise.all([
+      writeStreamToFile(path.join(outDir, normalizeHtmlFilePath(routePath)), stream!),
+      writeStreamToFile(path.join(outDir, normalizeRscFilePath(routePath)), rsc!),
+    ]);
   }
 }
 
-function normalizePaths(paths: string[]) {
-  return [...new Set(paths)]
-    .map((routePath) => normalizeRoutePath(routePath))
-    .sort((left, right) => left.localeCompare(right));
+function normalizePaths(paths: PrerenderPath[]) {
+  const byPath = new Map<string, PrerenderPath>();
+
+  for (const prerenderPath of paths) {
+    const normalizedPath = normalizeRoutePath(prerenderPath.path);
+    const previous = byPath.get(normalizedPath);
+
+    byPath.set(normalizedPath, {
+      path: normalizedPath,
+      forcePrerender: Boolean(previous?.forcePrerender || prerenderPath.forcePrerender),
+    });
+  }
+
+  return [...byPath.values()].sort((left, right) => left.path.localeCompare(right.path));
 }
 
 async function writeStreamToFile(filePath: string, stream: ReadableStream<Uint8Array>) {
   await mkdir(path.dirname(filePath), { recursive: true });
   await writeFile(filePath, Readable.fromWeb(stream as any));
+}
+
+async function probePrerenderRoute(entryPath: string, routePath: string) {
+  const entryUrl = pathToFileURL(entryPath).href;
+  const routeUrl = new URL(routePath, "http://nlite.local").href;
+  const script = `
+    const entry = await import(${JSON.stringify(entryUrl)});
+    const result = await entry.probePrerender(new Request(${JSON.stringify(routeUrl)}));
+    if (process.send) process.send({ type: "result", result });
+    process.exit(result ? 0 : 2);
+  `;
+
+  return new Promise<boolean>((resolve, reject) => {
+    const child = spawn(process.execPath, ["--input-type=module", "--eval", script], {
+      stdio: ["ignore", "ignore", "inherit", "ipc"],
+      env: process.env,
+    });
+    const timeout = setTimeout(() => {
+      child.kill("SIGKILL");
+      resolve(false);
+    }, 30_000);
+    let settled = false;
+
+    child.on("message", (message) => {
+      if (
+        message &&
+        typeof message === "object" &&
+        "type" in message &&
+        message.type === "result" &&
+        "result" in message
+      ) {
+        settled = true;
+        clearTimeout(timeout);
+        resolve(Boolean(message.result));
+      }
+    });
+
+    child.on("error", (error) => {
+      clearTimeout(timeout);
+      reject(error);
+    });
+
+    child.on("exit", (code, signal) => {
+      clearTimeout(timeout);
+
+      if (settled) {
+        return;
+      }
+
+      if (signal) {
+        resolve(false);
+        return;
+      }
+
+      if (code === 0 || code === 2) {
+        resolve(code === 0);
+        return;
+      }
+
+      reject(new Error(`Prerender probe failed for "${routePath}" with exit code ${code}`));
+    });
+  });
 }

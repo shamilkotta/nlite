@@ -11,15 +11,7 @@ function toRscPathname(pathname: string) {
   return pathname.endsWith(".rsc") ? pathname.slice(0, -4) || "/" : pathname;
 }
 
-function Document({
-  children,
-  pathname,
-  rendering,
-}: {
-  children: React.ReactNode;
-  pathname: string;
-  rendering: string;
-}) {
+function Document({ children, pathname }: { children: React.ReactNode; pathname: string }) {
   return React.createElement(
     "html",
     { lang: "en" },
@@ -43,7 +35,7 @@ function Document({
       }),
       React.createElement("script", {
         dangerouslySetInnerHTML: {
-          __html: "window.__NLITE_DATA__=" + JSON.stringify({ pathname, rendering }),
+          __html: "window.__NLITE_DATA__=" + JSON.stringify({ pathname }),
         },
       }),
       children,
@@ -75,7 +67,6 @@ export default async function handler(request: Request) {
   const documentNode = React.createElement(Document, {
     children: app,
     pathname,
-    rendering: match.route.rendering,
   });
   const rscPayload = { root: documentNode };
   const rscStream = renderToReadableStream<RscPayload>(rscPayload);
@@ -127,18 +118,29 @@ function getInlineRscBootstrapScript() {
     "    if (controller) controller.close();",
     "  };",
     "})();",
-  ].join("\n");
+  ].join("");
 }
 
 if (import.meta.hot) {
   import.meta.hot.accept();
 }
 
+class PrerenderAsyncAbortError extends Error {
+  constructor() {
+    super("Prerender async abort");
+    this.name = "PrerenderAsyncAbortError";
+  }
+}
+
+function isPrerenderAsyncAbortError(error: unknown, reason: PrerenderAsyncAbortError) {
+  return error === reason || (error instanceof Error && error.name === reason.name);
+}
+
 export async function collectPrerenderPaths() {
   return collectStaticPaths(routes);
 }
 
-export async function handleSsg(request: Request) {
+export async function handlePrerender(request: Request) {
   const renderRequest = parseRenderRequest(request);
   const match = matchRoute(routes, renderRequest.pathname);
 
@@ -150,17 +152,94 @@ export async function handleSsg(request: Request) {
   const documentNode = React.createElement(Document, {
     children: app,
     pathname: renderRequest.pathname,
-    rendering: "ssg",
   });
   const rscPayload = { root: documentNode };
-  const { prelude: rscStream } = await prerender<RscPayload>(rscPayload, createClientManifest());
-  const [rscStream1, rscStream2] = rscStream.tee();
+
+  const { prelude: rscStream } = await prerender<RscPayload>(rscPayload, createClientManifest(), {
+    onError: (error) => {
+      throw error;
+    },
+  });
+
+  if (!rscStream) {
+    return { stream: null, rsc: null, skip: true };
+  }
+
   const ssrEntry = await import.meta.viteRsc.loadModule<typeof import("./entry.ssr.ts")>(
     "ssr",
     "index",
   );
+  const [rscStream1, rscStream2] = rscStream.tee();
   const { stream: htmlStream } = await ssrEntry.renderHtml(rscStream1, { ssg: true });
-  return { stream: htmlStream, rsc: rscStream2 };
+  return { stream: htmlStream, rsc: rscStream2, skip: false };
+}
+
+export async function probePrerender(request: Request) {
+  const renderRequest = parseRenderRequest(request);
+  const match = matchRoute(routes, renderRequest.pathname);
+
+  if (!match) {
+    throw new Error('Cannot probe unknown route "' + renderRequest.pathname + '"');
+  }
+
+  if (match.route.rendering === "force-ssr") {
+    return false;
+  }
+
+  if (match.route.rendering === "force-ssg") {
+    return true;
+  }
+
+  const app = createRouteElement(match.route, match.params, renderRequest.url.searchParams);
+  const documentNode = React.createElement(Document, {
+    children: app,
+    pathname: renderRequest.pathname,
+  });
+  const rscPayload = { root: documentNode };
+  const controller = new AbortController();
+  const reason = new PrerenderAsyncAbortError();
+  let settled = false;
+  let rejected: unknown;
+
+  void prerender<RscPayload>(rscPayload, createClientManifest(), {
+    signal: controller.signal,
+    onError: (error) => {
+      if (isPrerenderAsyncAbortError(error, reason)) {
+        return;
+      }
+
+      throw error;
+    },
+  }).then(
+    () => {
+      settled = true;
+    },
+    (error) => {
+      settled = true;
+      rejected = error;
+    },
+  );
+
+  await new Promise<void>((resolve) => {
+    setImmediate(() => {
+      controller.abort(reason);
+      resolve();
+    });
+  });
+
+  if (!settled) {
+    return false;
+  }
+
+  if (rejected) {
+    if (isPrerenderAsyncAbortError(rejected, reason)) {
+      return false;
+    }
+
+    throw rejected;
+  }
+
+  return true;
 }
 
 function parseRenderRequest(request: Request) {
