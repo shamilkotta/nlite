@@ -10,7 +10,9 @@
   "dependencies": {
     "nlite": "workspace:*",
     "react": "^19.2.5",
-    "react-dom": "^19.2.5"
+    "react-dom": "^19.2.5",
+    "@cloudflare/vite-plugin": "^1.37.1",
+    "wrangler": "^4.92.0"
   },
   "devDependencies": {
     "@types/react": "^19.2.2",

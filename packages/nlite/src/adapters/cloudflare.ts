@@ -19,6 +19,11 @@ export async function cloudflare(): Promise<PluginOption[]> {
           main: rscEntryPath,
           compatibility_date: wranglerConfig.compatibility_date,
           workers_dev: wranglerConfig.workers_dev ?? true,
+          assets: {
+            ...wranglerConfig.assets,
+            not_found_handling: "none",
+            html_handling: "drop-trailing-slash",
+          },
         };
 
         if (!wranglerConfig.compatibility_flags?.includes("nodejs_compat")) {

@@ -5,7 +5,12 @@ import { createClientManifest } from "@vitejs/plugin-rsc/core/rsc";
 import routes from "virtual:nlite/routes";
 import { collectStaticPaths, createRouteElement, matchRoute } from "../runtime.js";
 import type { RscPayload } from "../types.js";
-import { normalizeHtmlFilePath, normalizeRscFilePath } from "../utils/path.js";
+
+type WorkerEnv = {
+  ASSETS?: {
+    fetch(request: Request): Promise<Response>;
+  };
+};
 
 function toRscPathname(pathname: string) {
   return pathname.endsWith(".rsc") ? pathname.slice(0, -4) || "/" : pathname;
@@ -43,13 +48,19 @@ function Document({ children, pathname }: { children: React.ReactNode; pathname:
   );
 }
 
-export default async function handler(request: Request) {
+export async function handler(request: Request, env?: WorkerEnv) {
   const url = new URL(request.url);
   const renderRequest = parseRenderRequest(request);
+
   const pathname = renderRequest.pathname;
   const match = matchRoute(routes, pathname);
 
   if (!match) {
+    if (env?.ASSETS) {
+      // TODO: serve 404 page from assets
+      return env.ASSETS.fetch(request);
+    }
+
     return new Response("Not Found", {
       status: 404,
       headers: { "content-type": "text/plain;charset=utf-8" },
@@ -83,6 +94,8 @@ export default async function handler(request: Request) {
     },
   });
 }
+
+export default { fetch: handler };
 
 function getInlineRscBootstrapScript() {
   return [
@@ -244,27 +257,4 @@ function parseRenderRequest(request: Request) {
     pathname,
     url,
   };
-}
-
-async function loadPrerenderedRoute(renderRequest: { isRsc: boolean; pathname: string; url: URL }) {
-  const staticUrl = new URL(
-    renderRequest.isRsc
-      ? `/${normalizeRscFilePath(renderRequest.pathname)}`
-      : `/${normalizeHtmlFilePath(renderRequest.pathname)}`,
-    renderRequest.url,
-  );
-
-  const staticResponse = await fetch(staticUrl);
-  if (staticResponse.ok) {
-    return staticResponse;
-  }
-
-  if (staticResponse.status === 404) {
-    return new Response("Not Found", {
-      status: 404,
-      headers: { "content-type": "text/plain;charset=utf-8" },
-    });
-  }
-
-  return staticResponse;
 }

@@ -1,3 +1,4 @@
+import { existsSync } from "node:fs";
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { spawn } from "node:child_process";
@@ -20,6 +21,61 @@ export function prerender(): Plugin {
           },
         };
       },
+    },
+    configurePreviewServer(server) {
+      const distDir = path.resolve(
+        server.config.root,
+        server.config.environments.client.build.outDir,
+      );
+
+      // rewrite clean URLs to prerendered html files
+      server.middlewares.use((req, _res, next) => {
+        if (req.method !== "GET" && req.method !== "HEAD") {
+          return next();
+        }
+
+        const accept = req.headers.accept;
+        if (
+          accept !== undefined &&
+          accept !== "" &&
+          !accept.includes("text/html") &&
+          !accept.includes("*/*")
+        ) {
+          return next();
+        }
+
+        const rawUrl = req.url;
+        if (!rawUrl) {
+          return next();
+        }
+
+        const [pathnamePart, ...rest] = rawUrl.split("?");
+        const query = rest.length > 0 ? `?${rest.join("?")}` : "";
+
+        let pathname: string;
+        try {
+          pathname = decodeURIComponent(pathnamePart);
+        } catch {
+          return next();
+        }
+
+        if (path.extname(pathname) || pathname == "/" || pathname == "") {
+          return next();
+        }
+
+        let htmlRelative: string;
+        if (pathname.endsWith("/")) {
+          htmlRelative = pathname.slice(1) + "index.html";
+        } else {
+          htmlRelative = normalizeHtmlFilePath(pathname);
+        }
+
+        if (existsSync(path.join(distDir, htmlRelative))) {
+          req.url = `/${htmlRelative}${query}`;
+        }
+
+        next();
+      });
     },
     buildApp: {
       async handler(builder) {

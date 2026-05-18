@@ -1,4 +1,3 @@
-import { existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -9,7 +8,6 @@ import type { ModuleNode, Plugin, PluginOption, ViteDevServer } from "vite";
 import { discoverRoutes } from "./fs-routes.js";
 import type { NliteOptions } from "./types.js";
 import { prerender } from "./prerender.plugin.js";
-import { normalizeHtmlFilePath } from "./utils/path.js";
 
 const VIRTUAL_MANIFEST_ID = "virtual:nlite/routes";
 const VIRTUAL_RUNTIME_ID = "virtual:nlite/runtime";
@@ -71,61 +69,6 @@ export function nlite(options: NliteOptions = {}): PluginOption[] {
       }
 
       return undefined;
-    },
-    configurePreviewServer(server) {
-      const distDir = path.resolve(
-        server.config.root,
-        server.config.environments.client.build.outDir,
-      );
-
-      // rewrite clean URLs to prerendered html files
-      server.middlewares.use((req, _res, next) => {
-        if (req.method !== "GET" && req.method !== "HEAD") {
-          return next();
-        }
-
-        const accept = req.headers.accept;
-        if (
-          accept !== undefined &&
-          accept !== "" &&
-          !accept.includes("text/html") &&
-          !accept.includes("*/*")
-        ) {
-          return next();
-        }
-
-        const rawUrl = req.url;
-        if (!rawUrl) {
-          return next();
-        }
-
-        const [pathnamePart, ...rest] = rawUrl.split("?");
-        const query = rest.length > 0 ? `?${rest.join("?")}` : "";
-
-        let pathname: string;
-        try {
-          pathname = decodeURIComponent(pathnamePart);
-        } catch {
-          return next();
-        }
-
-        if (path.extname(pathname) || pathname == "/" || pathname == "") {
-          return next();
-        }
-
-        let htmlRelative: string;
-        if (pathname.endsWith("/")) {
-          htmlRelative = pathname.slice(1) + "index.html";
-        } else {
-          htmlRelative = normalizeHtmlFilePath(pathname);
-        }
-
-        if (existsSync(path.join(distDir, htmlRelative))) {
-          req.url = `/${htmlRelative}${query}`;
-        }
-
-        next();
-      });
     },
   };
 
