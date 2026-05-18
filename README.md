@@ -1,43 +1,118 @@
 # nlite
 
-⚡ _"Like Next.js, if it was built in a garage with duct tape and React 19 hype"_
+`nlite` is a small experimental React framework built on Vite and React Server Components.
 
-### **What is this**
+This is a curiosity driven side project for learning how RSC, streaming SSR, static generation, file based routing, and deployment adapters can fit together on top of Vite.
 
-`nlite` is my attempt to create a React 19 framework that cobbles together **React Server Components (RSC)**, **SSR streaming**, and **static generation (SSG)**, **Partial prerendering** ..etc using the latest unstable APIs.
+## What It Does
 
-Think of it as **Next.js’s rebellious younger sibling**—fewer features, more `console.log` statements.
+- Uses React 19 and `@vitejs/plugin-rsc`.
+- Provides file based routing from an `app` directory.
+- Supports layouts, pages, loading UI, error UI, dynamic routes, and API routes.
+- Includes streaming SSR and static generation experiments.
+- Exposes a small CLI: `nlite dev`, `nlite build`, `nlite preview`, and `nlite start`.
+- Includes a basic Cloudflare adapter experiment.
 
-### **Goal**
+## What It Is Not
 
-To **learn React 19 and NextJS features** by rebuilding core Next.js features from scratch,
+- Not stable.
+- Not production ready.
+- Not a Next.js replacement.
+- Not guaranteed to keep the same APIs.
+- Not thoroughly tested across every edge case.
 
-- RSC and Client Components handling
-- Streaming SSR with Suspense and Error Boundaries
-- Static generation
-- Partial pre rendering
-- Routing using config files.
+Use it to read, experiment, break things, and understand the moving parts.
 
----
+## Repo Layout
 
-**Warning**: This is **not production-ready**. It’s a **toy project** that might:
+- `packages/nlite` - the framework package and CLI.
+- `examples/*` - a minimal examples.
 
-- Crash if you look at it wrong
-- Redefine "undefined behavior"
-- Accidentally summon a Cthulhu of `use()` promises
+## Requirements
 
-**But hey—it’s fun to hack on!** 🔧
+- Node.js compatible with Vite 8 and React 19.
+- pnpm.
 
----
-
-### **Quick Start**
+## Install
 
 ```bash
-git clone git@github.com:shamilkotta/nlite.git
-cd nlite
 pnpm install
-pnpm nlite build
-pnpm example build
-pnpm example start
-# pray to the React gods
 ```
+
+Build the package:
+
+```bash
+pnpm nlite build
+```
+
+## Run Examples
+
+Basic example:
+
+```bash
+pnpm --filter example-basic dev
+pnpm --filter example-basic build
+pnpm --filter example-basic preview
+```
+
+Cloudflare example:
+
+```bash
+pnpm --filter example-cloudflare dev
+pnpm --filter example-cloudflare build
+pnpm --filter example-cloudflare preview
+pnpm --filter example-cloudflare deploy
+```
+
+## Package Usage
+
+Inside an app:
+
+```bash
+pnpm add nlite react react-dom
+```
+
+Add scripts:
+
+```json
+{
+  "scripts": {
+    "dev": "nlite dev",
+    "build": "nlite build",
+    "preview": "nlite preview"
+  }
+}
+```
+
+Create `nlite.config.ts`:
+
+```ts
+import { defineConfig } from "nlite/config";
+
+export default defineConfig({});
+```
+
+Create routes inside `app`:
+
+```txt
+app/
+  layout.tsx
+  page.tsx
+  api/status/route.ts
+```
+
+More package-level notes are in [`packages/nlite/README.md`](packages/nlite/README.md).
+
+## Development
+
+```bash
+pnpm nlite dev          # watch package build
+pnpm nlite build        # build package
+pnpm lint               # oxlint
+pnpm format             # oxfmt
+pnpm test               # vitest
+```
+
+## License
+
+MIT
