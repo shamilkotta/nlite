@@ -1,22 +1,21 @@
-import { PageHeader } from "../../../components/PageHeader";
-import { formatTime } from "../../../lib/content";
+import Link from "nlite/link";
 
-export default async function UserPage({ params }: { params: Promise<{ id: string }> }) {
+import { getUserPublicRecord } from "../../../lib/server/app-data";
+
+export default async function Page({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
+  const user = getUserPublicRecord(id);
 
   return (
-    <section className="stack">
-      <PageHeader
-        eyebrow="Dynamic route"
-        title={`User ${id}`}
-        description="No generateStaticParams and no force-ssg — this route is rendered per request."
-        badge="SSR"
-      />
-      <div className="panel">
-        <p>
-          Resolved at request time: <code>{formatTime()}</code>
-        </p>
-      </div>
-    </section>
+    <main className="main">
+      <h1>User · {user.id}</h1>
+      <p className="muted">Dynamic segment + shared module (GET /api/users/:id matches).</p>
+      <pre className="block">{JSON.stringify(user, null, 2)}</pre>
+      <p>
+        <Link href="/examples">Examples</Link>
+        {" · "}
+        <Link href="/">Home</Link>
+      </p>
+    </main>
   );
 }

@@ -5,15 +5,15 @@ import "./styles.css";
 
 export default function RootLayout({ children }: PropsWithChildren) {
   return (
-    <div className="shell">
-      <header className="site-header">
+    <div className="wrap">
+      <header className="head">
         <Link href="/" className="brand">
-          nlite · Cloudflare
+          nlite · workers
         </Link>
-        <nav className="site-nav">
-          <Link href="/rendering/auto">Rendering</Link>
-          <Link href="/docs">Docs</Link>
-          <Link href="/demo/suspense">Demos</Link>
+        <nav className="head-nav">
+          <Link href="/">Home</Link>
+          <Link href="/examples">Examples</Link>
+          <Link href="/users/alice">users/[id]</Link>
         </nav>
       </header>
       {children}
