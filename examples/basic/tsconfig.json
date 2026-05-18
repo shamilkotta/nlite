@@ -5,7 +5,11 @@
     "moduleResolution": "Bundler",
     "jsx": "react-jsx",
     "strict": true,
-    "types": []
+    "types": [],
+    "paths": {
+      "*": ["./*"],
+      "@/*": ["./*"]
+    }
   },
   "include": ["app", "components", "lib", "nlite.config.ts"]
 }

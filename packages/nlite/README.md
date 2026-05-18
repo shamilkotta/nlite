@@ -167,6 +167,10 @@ export default defineConfig({
 });
 ```
 
+## Examples
+
+Working apps are in the [nlite examples](https://github.com/shamilkotta/nlite/tree/main/examples) directory:
+
 ## Status
 
 `nlite` is experimental. APIs and conventions may change while the project develops.

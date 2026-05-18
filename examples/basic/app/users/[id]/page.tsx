@@ -1,6 +1,6 @@
 import Link from "nlite/link";
 
-import { getUserPublicRecord } from "../../../lib/server/app-data";
+import { getUserPublicRecord } from "@/lib/server/app-data";
 
 export default async function Page({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;

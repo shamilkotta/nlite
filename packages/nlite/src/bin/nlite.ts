@@ -3,6 +3,7 @@
 import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
 
 const args = process.argv.slice(2);
@@ -61,7 +62,7 @@ function resolveProjectRoot(inputArgs: string[]) {
 
 function resolveConfigFile(projectRoot: string, viteArgs: string[]) {
   if (hasConfigArg(viteArgs)) {
-    return undefined;
+    return;
   }
 
   const candidates = [
@@ -81,7 +82,12 @@ function resolveConfigFile(projectRoot: string, viteArgs: string[]) {
     }
   }
 
-  return undefined;
+  return resolveDefaultConfigFile();
+}
+
+function resolveDefaultConfigFile() {
+  const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+  return path.join(packageRoot, "dist/internal/default-config.mjs");
 }
 
 function injectConfigArg(viteArgs: string[], configFile?: string) {

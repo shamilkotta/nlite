@@ -7,6 +7,7 @@ export default defineConfig((_opt): UserConfig[] => [
       "lib/link": "./src/lib/link.tsx",
       "lib/navigation": "./src/lib/navigation.tsx",
       config: "./src/config.ts",
+      "internal/default-config": "./src/internal/default-config.ts",
       runtime: "./src/runtime.tsx",
       "api.runtime": "./src/api.runtime.ts",
       "lib/errorBoundary": "./src/lib/errorBoundary.tsx",
