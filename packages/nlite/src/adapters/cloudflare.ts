@@ -12,7 +12,7 @@ export async function cloudflare(): Promise<PluginOption[]> {
     ...cloudflarePlugin({
       viteEnvironment: {
         name: "rsc",
-        childEnvironments: ["ssr"],
+        childEnvironments: ["ssr", "api"],
       },
       config(wranglerConfig) {
         const defaults: Record<string, unknown> = {

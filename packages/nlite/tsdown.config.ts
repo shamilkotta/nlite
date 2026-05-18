@@ -8,6 +8,7 @@ export default defineConfig((_opt): UserConfig[] => [
       "lib/navigation": "./src/lib/navigation.tsx",
       config: "./src/config.ts",
       runtime: "./src/runtime.tsx",
+      "api.runtime": "./src/api.runtime.ts",
       "lib/errorBoundary": "./src/lib/errorBoundary.tsx",
       "modules/entry.rsc": "./src/modules/entry.rsc.ts",
       "modules/entry.ssr": "./src/modules/entry.ssr.ts",
@@ -16,7 +17,7 @@ export default defineConfig((_opt): UserConfig[] => [
     },
     dts: true,
     deps: {
-      neverBundle: ["virtual:nlite/routes", "nlite"],
+      neverBundle: ["virtual:nlite/routes", "virtual:nlite/api", "nlite"],
     },
     format: "esm",
     outDir: "dist",

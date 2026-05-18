@@ -5,14 +5,19 @@ import react from "@vitejs/plugin-react";
 import rsc from "@vitejs/plugin-rsc";
 import type { ModuleNode, Plugin, PluginOption, ViteDevServer } from "vite";
 
-import { discoverRoutes } from "./fs-routes.js";
-import type { NliteOptions } from "./types.js";
-import { prerender } from "./prerender.plugin.js";
+import { api } from "./api.js";
+import { discoverRoutes } from "../utils/fs-routes.js";
+import { prerender } from "./prerender.js";
+import type { NliteOptions } from "../types.js";
 
 const VIRTUAL_MANIFEST_ID = "virtual:nlite/routes";
 const VIRTUAL_RUNTIME_ID = "virtual:nlite/runtime";
-
 const RESOLVED_MANIFEST_ID = `\0${VIRTUAL_MANIFEST_ID}`;
+
+interface ModuleGraphLike {
+  getModuleById(id: string): ModuleNode | undefined;
+  invalidateModule(mod: ModuleNode): void;
+}
 
 export function nlite(options: NliteOptions = {}): PluginOption[] {
   const appDir = options.appDir ?? "app";
@@ -24,6 +29,9 @@ export function nlite(options: NliteOptions = {}): PluginOption[] {
   const frameworkPlugin: Plugin = {
     name: "nlite",
     enforce: "pre",
+    applyToEnvironment(environment) {
+      return environment.name !== "api";
+    },
     configResolved(config) {
       projectRoot = config.root;
     },
@@ -40,11 +48,7 @@ export function nlite(options: NliteOptions = {}): PluginOption[] {
     configureServer(server) {
       const appRoot = path.resolve(server.config.root, appDir);
 
-      server.watcher.add(appRoot);
-      server.watcher.on("add", (file) => invalidateRoutes(server, appRoot, file));
-      server.watcher.on("unlink", (file) => invalidateRoutes(server, appRoot, file));
-      server.watcher.on("addDir", (file) => invalidateRoutes(server, appRoot, file));
-      server.watcher.on("unlinkDir", (file) => invalidateRoutes(server, appRoot, file));
+      watchRouteFiles(server, appRoot);
     },
     resolveId(id) {
       if (id === RESOLVED_MANIFEST_ID || id === runtimeId) {
@@ -59,16 +63,15 @@ export function nlite(options: NliteOptions = {}): PluginOption[] {
         return runtimeId;
       }
 
-      return undefined;
+      return;
     },
     async load(id) {
       if (id === RESOLVED_MANIFEST_ID) {
         const routes = await discoverRoutes(projectRoot, appDir);
-
         return buildManifestModule(routes);
       }
 
-      return undefined;
+      return;
     },
   };
 
@@ -83,7 +86,19 @@ export function nlite(options: NliteOptions = {}): PluginOption[] {
       },
     }),
     prerender(),
+    api(options),
   ];
+}
+
+function watchRouteFiles(server: ViteDevServer, appRoot: string) {
+  server.watcher.add(appRoot);
+
+  const invalidateChangedRoute = (file: string) => invalidateRoutes(server, appRoot, file);
+
+  server.watcher.on("add", invalidateChangedRoute);
+  server.watcher.on("unlink", invalidateChangedRoute);
+  server.watcher.on("addDir", invalidateChangedRoute);
+  server.watcher.on("unlinkDir", invalidateChangedRoute);
 }
 
 function invalidateRoutes(server: ViteDevServer, appRoot: string, file: string) {
@@ -95,14 +110,11 @@ function invalidateRoutes(server: ViteDevServer, appRoot: string, file: string) 
     return;
   }
 
-  invalidateManifestModuleGraph(server.moduleGraph);
-  invalidateManifestInAllEnvironments(server);
+  invalidateVirtualModule(server.moduleGraph);
+  invalidateVirtualModulesInAllEnvironments(server);
 }
 
-function invalidateManifestModuleGraph(moduleGraph: {
-  getModuleById: (id: string) => ModuleNode | undefined;
-  invalidateModule: (mod: ModuleNode) => void;
-}) {
+function invalidateVirtualModule(moduleGraph: ModuleGraphLike) {
   const manifestModule = moduleGraph.getModuleById(RESOLVED_MANIFEST_ID);
 
   if (manifestModule) {
@@ -110,7 +122,7 @@ function invalidateManifestModuleGraph(moduleGraph: {
   }
 }
 
-function invalidateManifestInAllEnvironments(server: ViteDevServer) {
+function invalidateVirtualModulesInAllEnvironments(server: ViteDevServer) {
   const environments = (server as { environments?: Record<string, unknown> }).environments;
 
   if (!environments) {
@@ -118,28 +130,32 @@ function invalidateManifestInAllEnvironments(server: ViteDevServer) {
   }
 
   for (const environment of Object.values(environments)) {
-    if (!environment || typeof environment !== "object" || !("moduleGraph" in environment)) {
+    const moduleGraph = getEnvironmentModuleGraph(environment);
+    if (!moduleGraph) {
       continue;
     }
 
-    const { moduleGraph } = environment as { moduleGraph?: unknown };
-
-    if (
-      !moduleGraph ||
-      typeof moduleGraph !== "object" ||
-      !("getModuleById" in moduleGraph) ||
-      !("invalidateModule" in moduleGraph)
-    ) {
-      continue;
-    }
-
-    invalidateManifestModuleGraph(
-      moduleGraph as {
-        getModuleById: (id: string) => ModuleNode | undefined;
-        invalidateModule: (mod: ModuleNode) => void;
-      },
-    );
+    invalidateVirtualModule(moduleGraph);
   }
+}
+
+function getEnvironmentModuleGraph(environment: unknown): ModuleGraphLike | undefined {
+  if (!environment || typeof environment !== "object" || !("moduleGraph" in environment)) {
+    return;
+  }
+
+  const { moduleGraph } = environment as { moduleGraph?: unknown };
+
+  if (
+    !moduleGraph ||
+    typeof moduleGraph !== "object" ||
+    !("getModuleById" in moduleGraph) ||
+    !("invalidateModule" in moduleGraph)
+  ) {
+    return;
+  }
+
+  return moduleGraph as ModuleGraphLike;
 }
 
 function buildManifestModule(routes: Awaited<ReturnType<typeof discoverRoutes>>) {
@@ -150,47 +166,15 @@ function buildManifestModule(routes: Awaited<ReturnType<typeof discoverRoutes>>)
     const pageVar = `pageModule${index}`;
     imports.push(`import * as ${pageVar} from ${JSON.stringify(route.page)};`);
 
-    const treeVars: {
-      layout?: string;
-      loading?: string;
-      error?: string;
-    }[] = [];
-    route.tree.forEach((segment, segmentIndex) => {
-      const currentVar: (typeof treeVars)[number] = {};
-      if (segment.layout) {
-        const layoutVar = `layout${index}_${segmentIndex}`;
-        currentVar.layout = layoutVar;
-        imports.push(`import * as ${layoutVar} from ${JSON.stringify(segment.layout)};`);
-      }
-      if (segment.loading) {
-        const loadingVar = `loading${index}_${segmentIndex}`;
-        currentVar.loading = loadingVar;
-        imports.push(`import * as ${loadingVar} from ${JSON.stringify(segment.loading)};`);
-      }
-      if (segment.error) {
-        const errorVar = `error${index}_${segmentIndex}`;
-        currentVar.error = errorVar;
-        imports.push(`import * as ${errorVar} from ${JSON.stringify(segment.error)};`);
-      }
-      treeVars.push(currentVar);
-    });
-
-    const treeRecord = treeVars
-      .map((segment) => {
-        const entries: string[] = [];
-
-        if (segment.layout) {
-          entries.push(`layout: ${segment.layout}`);
-        }
-        if (segment.loading) {
-          entries.push(`loading: ${segment.loading}`);
-        }
-        if (segment.error) {
-          entries.push(`error: ${segment.error}`);
-        }
-
-        return `{ ${entries.join(", ")} }`;
-      })
+    const treeRecord = route.tree
+      .map((segment, segmentIndex) =>
+        buildTreeSegmentModule({
+          imports,
+          routeIndex: index,
+          segmentIndex,
+          segment,
+        }),
+      )
       .join(",\n    ");
 
     records.push(`createRouteRecord({
@@ -212,4 +196,63 @@ export const routes = [
 
 export default routes;
 `;
+}
+
+function buildTreeSegmentModule({
+  imports,
+  routeIndex,
+  segmentIndex,
+  segment,
+}: {
+  imports: string[];
+  routeIndex: number;
+  segmentIndex: number;
+  segment: Awaited<ReturnType<typeof discoverRoutes>>[number]["tree"][number];
+}) {
+  const entries: string[] = [];
+
+  addTreeConventionImport({
+    entries,
+    imports,
+    exportName: "layout",
+    source: segment.layout,
+    variableName: `layout${routeIndex}_${segmentIndex}`,
+  });
+  addTreeConventionImport({
+    entries,
+    imports,
+    exportName: "loading",
+    source: segment.loading,
+    variableName: `loading${routeIndex}_${segmentIndex}`,
+  });
+  addTreeConventionImport({
+    entries,
+    imports,
+    exportName: "error",
+    source: segment.error,
+    variableName: `error${routeIndex}_${segmentIndex}`,
+  });
+
+  return `{ ${entries.join(", ")} }`;
+}
+
+function addTreeConventionImport({
+  entries,
+  imports,
+  exportName,
+  source,
+  variableName,
+}: {
+  entries: string[];
+  imports: string[];
+  exportName: string;
+  source?: string;
+  variableName: string;
+}) {
+  if (!source) {
+    return;
+  }
+
+  imports.push(`import * as ${variableName} from ${JSON.stringify(source)};`);
+  entries.push(`${exportName}: ${variableName}`);
 }

@@ -3,10 +3,17 @@ import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { spawn } from "node:child_process";
 import { Readable } from "node:stream";
+import type { ReadableStream as NodeReadableStream } from "node:stream/web";
 import { pathToFileURL } from "node:url";
 import type { ConfigEnv, Plugin, ResolvedConfig, UserConfig } from "vite";
-import type { PrerenderPath } from "./types.js";
-import { normalizeHtmlFilePath, normalizeRoutePath, normalizeRscFilePath } from "./utils/path.js";
+
+import {
+  PRERENDER_ORIGIN,
+  PRERENDER_PROBE_TIMEOUT_MS,
+  NOT_FOUND_HTML,
+} from "../utils/constants.js";
+import type { PrerenderPath } from "../types.js";
+import { normalizeHtmlFilePath, normalizeRoutePath, normalizeRscFilePath } from "../utils/path.js";
 
 export function prerender(): Plugin {
   return {
@@ -30,48 +37,10 @@ export function prerender(): Plugin {
 
       // rewrite clean URLs to prerendered html files
       server.middlewares.use((req, _res, next) => {
-        if (req.method !== "GET" && req.method !== "HEAD") {
-          return next();
-        }
+        const htmlPath = getPreviewHtmlRewrite(req, distDir);
 
-        const accept = req.headers.accept;
-        if (
-          accept !== undefined &&
-          accept !== "" &&
-          !accept.includes("text/html") &&
-          !accept.includes("*/*")
-        ) {
-          return next();
-        }
-
-        const rawUrl = req.url;
-        if (!rawUrl) {
-          return next();
-        }
-
-        const [pathnamePart, ...rest] = rawUrl.split("?");
-        const query = rest.length > 0 ? `?${rest.join("?")}` : "";
-
-        let pathname: string;
-        try {
-          pathname = decodeURIComponent(pathnamePart);
-        } catch {
-          return next();
-        }
-
-        if (path.extname(pathname) || pathname == "/" || pathname == "") {
-          return next();
-        }
-
-        let htmlRelative: string;
-        if (pathname.endsWith("/")) {
-          htmlRelative = pathname.slice(1) + "index.html";
-        } else {
-          htmlRelative = normalizeHtmlFilePath(pathname);
-        }
-
-        if (existsSync(path.join(distDir, htmlRelative))) {
-          req.url = `/${htmlRelative}${query}`;
+        if (htmlPath) {
+          req.url = htmlPath;
         }
 
         next();
@@ -85,9 +54,45 @@ export function prerender(): Plugin {
   };
 }
 
+function getPreviewHtmlRewrite(
+  req: { method?: string; headers: { accept?: string | string[] }; url?: string },
+  distDir: string,
+) {
+  if (req.method !== "GET" && req.method !== "HEAD") return;
+  const accept = Array.isArray(req.headers.accept)
+    ? req.headers.accept.join(",")
+    : req.headers.accept;
+
+  const isHtmlAccept = !accept || accept.includes("text/html") || accept.includes("*/*");
+
+  if (!isHtmlAccept) return;
+
+  const parsedUrl = parseRequestUrl(req.url);
+  if (!parsedUrl) {
+    return;
+  }
+
+  const { pathname, query } = parsedUrl;
+
+  if (
+    pathname === "" ||
+    pathname === "/" ||
+    pathname.startsWith("/api/") ||
+    Boolean(path.extname(pathname))
+  )
+    return;
+
+  const htmlRelative = normalizeHtmlFilePath(normalizeRoutePath(pathname));
+  if (!existsSync(path.join(distDir, htmlRelative))) {
+    return;
+  }
+
+  return `/${htmlRelative}${query}`;
+}
+
 async function renderStatic(config: ResolvedConfig) {
   const entryPath = path.join(config.environments.rsc.build.outDir, "index.js");
-  const entry: typeof import("./modules/entry.rsc.js") = await import(
+  const entry: typeof import("../modules/entry.rsc.js") = await import(
     /* @vite-ignore */ pathToFileURL(entryPath).href
   );
 
@@ -99,17 +104,22 @@ async function renderStatic(config: ResolvedConfig) {
   const outDir = path.resolve(config.environments.client.build.outDir);
 
   for (const { path: routePath, forcePrerender } of staticPaths) {
-    const request = new Request(new URL(routePath, "http://nlite.local"));
+    const request = new Request(new URL(routePath, PRERENDER_ORIGIN));
     const shouldPrerender = forcePrerender || (await probePrerenderRoute(entryPath, routePath));
     if (!shouldPrerender) continue;
 
     const { rsc, stream, skip } = await entry.handlePrerender(request);
-    if (skip) continue;
+    if (skip || !stream || !rsc) continue;
 
     await Promise.all([
-      writeStreamToFile(path.join(outDir, normalizeHtmlFilePath(routePath)), stream!),
-      writeStreamToFile(path.join(outDir, normalizeRscFilePath(routePath)), rsc!),
+      writeStreamToFile(path.join(outDir, normalizeHtmlFilePath(routePath)), stream),
+      writeStreamToFile(path.join(outDir, normalizeRscFilePath(routePath)), rsc),
     ]);
+  }
+
+  const notFoundHtml = path.join(outDir, "404.html");
+  if (!existsSync(notFoundHtml)) {
+    await writeFile(notFoundHtml, NOT_FOUND_HTML);
   }
 }
 
@@ -131,12 +141,12 @@ function normalizePaths(paths: PrerenderPath[]) {
 
 async function writeStreamToFile(filePath: string, stream: ReadableStream<Uint8Array>) {
   await mkdir(path.dirname(filePath), { recursive: true });
-  await writeFile(filePath, Readable.fromWeb(stream as any));
+  await writeFile(filePath, Readable.fromWeb(stream as NodeReadableStream<Uint8Array>));
 }
 
 async function probePrerenderRoute(entryPath: string, routePath: string) {
   const entryUrl = pathToFileURL(entryPath).href;
-  const routeUrl = new URL(routePath, "http://nlite.local").href;
+  const routeUrl = new URL(routePath, PRERENDER_ORIGIN).href;
   const script = `
     const entry = await import(${JSON.stringify(entryUrl)});
     const result = await entry.probePrerender(new Request(${JSON.stringify(routeUrl)}));
@@ -145,53 +155,98 @@ async function probePrerenderRoute(entryPath: string, routePath: string) {
   `;
 
   return new Promise<boolean>((resolve, reject) => {
+    let settled = false;
     const child = spawn(process.execPath, ["--input-type=module", "--eval", script], {
       stdio: ["ignore", "ignore", "inherit", "ipc"],
       env: process.env,
     });
+
     const timeout = setTimeout(() => {
+      settled = true;
       child.kill("SIGKILL");
       resolve(false);
-    }, 30_000);
-    let settled = false;
+    }, PRERENDER_PROBE_TIMEOUT_MS);
+
+    const settle = (result: boolean) => {
+      if (settled) {
+        return;
+      }
+
+      settled = true;
+      clearTimeout(timeout);
+      resolve(result);
+    };
+
+    const fail = (error: Error) => {
+      if (settled) {
+        return;
+      }
+
+      settled = true;
+      clearTimeout(timeout);
+      reject(error);
+    };
 
     child.on("message", (message) => {
-      if (
-        message &&
-        typeof message === "object" &&
-        "type" in message &&
-        message.type === "result" &&
-        "result" in message
-      ) {
-        settled = true;
-        clearTimeout(timeout);
-        resolve(Boolean(message.result));
+      const result = readProbeResult(message);
+
+      if (result !== undefined) {
+        settle(result);
       }
     });
 
     child.on("error", (error) => {
-      clearTimeout(timeout);
-      reject(error);
+      fail(error);
     });
 
     child.on("exit", (code, signal) => {
-      clearTimeout(timeout);
-
       if (settled) {
         return;
       }
 
       if (signal) {
-        resolve(false);
+        settle(false);
         return;
       }
 
       if (code === 0 || code === 2) {
-        resolve(code === 0);
+        settle(code === 0);
         return;
       }
 
-      reject(new Error(`Prerender probe failed for "${routePath}" with exit code ${code}`));
+      fail(new Error(`Prerender probe failed for "${routePath}" with exit code ${code}`));
     });
   });
+}
+
+function parseRequestUrl(rawUrl: string | undefined) {
+  if (!rawUrl) {
+    return;
+  }
+
+  const [pathnamePart, ...rest] = rawUrl.split("?");
+  const query = rest.length > 0 ? `?${rest.join("?")}` : "";
+
+  try {
+    return {
+      pathname: decodeURIComponent(pathnamePart),
+      query,
+    };
+  } catch {
+    return;
+  }
+}
+
+function readProbeResult(message: unknown) {
+  if (
+    !message ||
+    typeof message !== "object" ||
+    !("type" in message) ||
+    message.type !== "result" ||
+    !("result" in message)
+  ) {
+    return;
+  }
+
+  return Boolean(message.result);
 }

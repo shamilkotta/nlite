@@ -42,6 +42,7 @@
   "dependencies": {
     "@vitejs/plugin-react": "^6.0.1",
     "@vitejs/plugin-rsc": "^0.5.23",
+    "h3": "2.0.1-rc.22",
     "tinyglobby": "^0.2.16",
     "vite": "^8.0.8"
   },

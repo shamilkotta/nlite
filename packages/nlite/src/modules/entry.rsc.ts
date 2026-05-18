@@ -28,6 +28,11 @@ function Document({ children, pathname }: { children: React.ReactNode; pathname:
         name: "viewport",
         content: "width=device-width, initial-scale=1",
       }),
+      React.createElement("link", {
+        rel: "icon",
+        href: "/favicon.ico",
+        sizes: "any",
+      }),
       import.meta.viteRsc.loadCss(),
     ),
     React.createElement(
@@ -50,15 +55,23 @@ function Document({ children, pathname }: { children: React.ReactNode; pathname:
 
 export async function handler(request: Request, env?: WorkerEnv) {
   const url = new URL(request.url);
-  const renderRequest = parseRenderRequest(request);
+  const pathname = url.pathname;
 
-  const pathname = renderRequest.pathname;
-  const match = matchRoute(routes, pathname);
+  const apiEntry = await import.meta.viteRsc.loadModule<typeof import("virtual:nlite/api")>(
+    "api",
+    "index",
+  );
+  if (apiEntry.apiHandler && apiEntry.couldMatchApi(pathname)) {
+    return apiEntry.apiHandler(request);
+  }
+
+  const renderRequest = parseRenderRequest(request, pathname);
+  const match = matchRoute(routes, renderRequest.pathname);
 
   if (!match) {
     if (env?.ASSETS) {
       // TODO: serve 404 page from assets
-      return env.ASSETS.fetch(request);
+      return env.ASSETS.fetch(new Request(`/404.html`, request));
     }
 
     return new Response("Not Found", {
@@ -248,13 +261,13 @@ export async function probePrerender(request: Request) {
   return true;
 }
 
-function parseRenderRequest(request: Request) {
+function parseRenderRequest(request: Request, pathname = new URL(request.url).pathname) {
   const url = new URL(request.url);
-  const pathname = toRscPathname(url.pathname);
+  const pagePathname = toRscPathname(pathname);
 
   return {
-    isRsc: url.pathname.endsWith(".rsc"),
-    pathname,
+    isRsc: pathname.endsWith(".rsc"),
+    pathname: pagePathname,
     url,
   };
 }

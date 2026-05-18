@@ -1,6 +1,7 @@
 import React, { Suspense } from "react";
 
 import { ErrorBoundary } from "./lib/errorBoundary.js";
+import { compileRoutePath, matchCompiledPath } from "./utils/path.js";
 import type {
   NliteRouteSegmentModule,
   NlitePageModule,
@@ -35,26 +36,13 @@ export function matchRoute(
   routes: NliteRouteRecord[],
   pathname: string,
 ): NliteRouteMatch | undefined {
-  for (const route of routes) {
-    const match = pathname.match(new RegExp(route.regex));
+  const matched = matchCompiledPath(routes, pathname);
 
-    if (!match) {
-      continue;
-    }
-
-    const params: RouteParams = {};
-
-    route.paramNames.forEach((name, index) => {
-      const value = decodeURIComponent(match[index + 1] ?? "");
-      params[name] = route.routePath.includes(`*${name}`)
-        ? value.split("/").filter(Boolean)
-        : value;
-    });
-
-    return { route, params };
+  if (!matched) {
+    return;
   }
 
-  return undefined;
+  return { route: matched.route as NliteRouteRecord, params: matched.params };
 }
 
 export function createRouteElement(
@@ -123,36 +111,6 @@ export async function collectStaticPaths(routes: NliteRouteRecord[]) {
   return output;
 }
 
-function compileRoutePath(routePath: string) {
-  if (routePath === "/") {
-    return {
-      regex: "^/$",
-      paramNames: [],
-    };
-  }
-
-  const paramNames: string[] = [];
-  const segments = routePath.split("/").filter(Boolean);
-  const regexSegments = segments.map((segment) => {
-    if (segment.startsWith(":")) {
-      paramNames.push(segment.slice(1));
-      return "([^/]+)";
-    }
-
-    if (segment.startsWith("*")) {
-      paramNames.push(segment.slice(1));
-      return "(.*)";
-    }
-
-    return escapeRegex(segment);
-  });
-
-  return {
-    regex: `^/${regexSegments.join("/")}$`,
-    paramNames,
-  };
-}
-
 function interpolateRoutePath(routePath: string, params: RouteParams) {
   if (routePath === "/") {
     return "/";
@@ -176,8 +134,4 @@ function interpolateRoutePath(routePath: string, params: RouteParams) {
       return segment;
     })
     .join("/")}`;
-}
-
-function escapeRegex(value: string) {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }

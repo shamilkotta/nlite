@@ -64,6 +64,30 @@ export interface NliteOptions {
   appDir?: string;
 }
 
+export type ApiRouteHandler = (
+  request: Request,
+  context: ApiRouteContext,
+) => Response | Promise<Response>;
+
+export interface ApiRouteContext {
+  params: Promise<RouteParams>;
+}
+
+export type ApiRouteModule = Partial<Record<HttpMethod, ApiRouteHandler>>;
+
+export type HttpMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE" | "HEAD" | "OPTIONS";
+
+export interface ApiRouteRecord {
+  id: string;
+  routePath: string;
+  sourceFile: string;
+  module: ApiRouteModule;
+  regex: string;
+  paramNames: string[];
+  catchAllParamNames: string[];
+  h3RoutePath: string;
+}
+
 export interface NavigateOptions {
   scroll?: boolean;
 }

@@ -1,7 +1,7 @@
 import { access } from "node:fs/promises";
 import path from "node:path";
 
-import { FILE_EXTENSIONS } from "./utils/constants.js";
+import { FILE_EXTENSIONS } from "./constants.js";
 import { glob } from "tinyglobby";
 
 export interface RouteModuleFiles {
@@ -18,10 +18,15 @@ export interface DiscoveredRoute extends RouteModuleFiles {
   routePath: string;
 }
 
+export interface DiscoveredApiRoute {
+  id: string;
+  routePath: string;
+  routeFile: string;
+}
+
 export async function discoverRoutes(projectRoot: string, appDir = "app") {
   const appRoot = path.resolve(projectRoot, appDir);
-  const pagePattern = `**/page.{${FILE_EXTENSIONS.join(",")}}`;
-  const pageFiles = await glob(pagePattern, {
+  const pageFiles = await glob(`**/page.{${FILE_EXTENSIONS.join(",")}}`, {
     cwd: appRoot,
     absolute: true,
     onlyFiles: true,
@@ -40,6 +45,24 @@ export async function discoverRoutes(projectRoot: string, appDir = "app") {
       tree,
     });
   }
+
+  return routes.sort((left, right) => scoreRoute(right.routePath) - scoreRoute(left.routePath));
+}
+
+export async function discoverApiRoutes(projectRoot: string, appDir = "app") {
+  const appRoot = path.resolve(projectRoot, appDir);
+  const apiRoot = path.resolve(appRoot, "api");
+  const routeFiles = await glob(`**/route.{${FILE_EXTENSIONS.join(",")}}`, {
+    cwd: apiRoot,
+    absolute: true,
+    onlyFiles: true,
+  });
+
+  const routes: DiscoveredApiRoute[] = routeFiles.sort().map((routeFile) => ({
+    id: toPosix(path.relative(projectRoot, routeFile)),
+    routePath: toRoutePath(appRoot, routeFile),
+    routeFile,
+  }));
 
   return routes.sort((left, right) => scoreRoute(right.routePath) - scoreRoute(left.routePath));
 }
@@ -86,8 +109,8 @@ async function findConventionFile(dir: string, basename: string) {
   return undefined;
 }
 
-function toRoutePath(appRoot: string, pageFile: string) {
-  const relativeDir = path.relative(appRoot, path.dirname(pageFile));
+function toRoutePath(appRoot: string, conventionFile: string) {
+  const relativeDir = path.relative(appRoot, path.dirname(conventionFile));
 
   if (!relativeDir) {
     return "/";

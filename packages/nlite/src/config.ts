@@ -7,7 +7,7 @@ import {
   type UserConfigExport,
 } from "vite";
 
-import { nlite } from "./plugin.js";
+import { nlite } from "./plugins/index.js";
 import type { NliteOptions } from "./types.js";
 
 export interface NliteUserConfig extends UserConfig {

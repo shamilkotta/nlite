@@ -5,6 +5,13 @@ declare module "virtual:nlite/routes" {
   export default routes;
 }
 
+declare module "virtual:nlite/api" {
+  const apiHandler: (request: Request) => Promise<Response>;
+  const couldMatchApi: (pathname: string) => boolean;
+
+  export { apiHandler, couldMatchApi };
+}
+
 declare module "@vitejs/plugin-rsc/vendor/react-server-dom/static.edge" {
   export function prerender<TModel>(
     model: TModel,

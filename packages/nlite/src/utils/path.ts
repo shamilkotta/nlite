@@ -1,4 +1,7 @@
+import type { RouteParams } from "../types.js";
+
 export const RSC_POSTFIX = ".rsc";
+
 export function normalizeRoutePath(routePath: string) {
   if (!routePath || routePath === "/") {
     return "/";
@@ -22,4 +25,64 @@ export function normalizeRscFilePath(routePath: string) {
   }
 
   return routePath.slice(1) + RSC_POSTFIX;
+}
+
+export function compileRoutePath(routePath: string) {
+  if (routePath === "/") {
+    return {
+      regex: "^/$",
+      paramNames: [],
+    };
+  }
+
+  const paramNames: string[] = [];
+  const segments = routePath.split("/").filter(Boolean);
+  const regexSegments = segments.map((segment) => {
+    if (segment.startsWith(":")) {
+      paramNames.push(segment.slice(1));
+      return "([^/]+)";
+    }
+
+    if (segment.startsWith("*")) {
+      paramNames.push(segment.slice(1));
+      return "(.*)";
+    }
+
+    return escapeRegex(segment);
+  });
+
+  return {
+    regex: `^/${regexSegments.join("/")}$`,
+    paramNames,
+  };
+}
+
+export function matchCompiledPath(
+  routes: { routePath: string; regex: string; paramNames: string[] }[],
+  pathname: string,
+) {
+  for (const route of routes) {
+    const match = pathname.match(new RegExp(route.regex));
+
+    if (!match) {
+      continue;
+    }
+
+    const params: RouteParams = {};
+
+    route.paramNames.forEach((name, index) => {
+      const value = decodeURIComponent(match[index + 1] ?? "");
+      params[name] = route.routePath.includes(`*${name}`)
+        ? value.split("/").filter(Boolean)
+        : value;
+    });
+
+    return { route, params };
+  }
+
+  return;
+}
+
+function escapeRegex(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
