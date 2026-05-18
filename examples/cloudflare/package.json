@@ -1,0 +1,23 @@
+{
+  "name": "example-cloudflare",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "nlite dev",
+    "build": "nlite build",
+    "preview": "nlite preview",
+    "deploy": "wrangler deploy"
+  },
+  "dependencies": {
+    "@cloudflare/vite-plugin": "^1.37.1",
+    "nlite": "workspace:*",
+    "react": "^19.2.5",
+    "react-dom": "^19.2.5",
+    "wrangler": "^4.92.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.2",
+    "@types/react-dom": "^19.2.2",
+    "typescript": "^5.9.3"
+  }
+}
