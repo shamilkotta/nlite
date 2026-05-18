@@ -3,28 +3,25 @@
   "version": "0.1.0",
   "description": "Experimental React 19 framework on top of Vite",
   "keywords": [
+    "cloudflare",
+    "framework",
     "react",
     "react-server-components",
-    "rsc",
-    "vite",
-    "ssr",
-    "framework",
     "routing",
-    "cloudflare"
+    "rsc",
+    "ssr",
+    "vite"
   ],
+  "homepage": "https://github.com/shamilkotta/nlite/tree/main/packages/nlite#readme",
+  "bugs": {
+    "url": "https://github.com/shamilkotta/nlite/issues"
+  },
   "license": "MIT",
   "author": "Shamil (https://github.com/shamilkotta)",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/shamilkotta/nlite.git",
     "directory": "packages/nlite"
-  },
-  "bugs": {
-    "url": "https://github.com/shamilkotta/nlite/issues"
-  },
-  "homepage": "https://github.com/shamilkotta/nlite/tree/main/packages/nlite#readme",
-  "engines": {
-    "node": "^20.19.0 || >=22.12.0"
   },
   "bin": {
     "nlite": "./bin/nlite.js"
@@ -91,5 +88,8 @@
     "@cloudflare/vite-plugin": {
       "optional": true
     }
+  },
+  "engines": {
+    "node": "^20.19.0 || >=22.12.0"
   }
 }

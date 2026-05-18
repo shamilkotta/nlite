@@ -13,8 +13,8 @@ export default async function Page() {
     <main className="main">
       <h1>Server Component → API routes</h1>
       <p className="muted">
-        <code>force-ssr</code> page using <code>fetch(NLITE_ORIGIN + &quot;/api/…&quot;)</code>. Set env{" "}
-        <code>NLITE_ORIGIN</code> (no trailing slash).
+        <code>force-ssr</code> page using <code>fetch(NLITE_ORIGIN + &quot;/api/…&quot;)</code>. Set
+        env <code>NLITE_ORIGIN</code> (no trailing slash).
       </p>
 
       <h2 className="h2">GET /api/status</h2>

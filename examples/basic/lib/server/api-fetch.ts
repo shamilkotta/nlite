@@ -1,6 +1,4 @@
-export type ApiFetchResult<T> =
-  | { ok: true; data: T }
-  | { ok: false; message: string };
+export type ApiFetchResult<T> = { ok: true; data: T } | { ok: false; message: string };
 
 /** Same-origin fetch from a Server Component. Requires NLITE_ORIGIN (no trailing slash), e.g. http://127.0.0.1:5173 */
 export async function fetchApiJson<T>(path: string): Promise<ApiFetchResult<T>> {

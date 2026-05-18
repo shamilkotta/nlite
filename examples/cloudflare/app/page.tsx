@@ -8,7 +8,9 @@ export default async function Page() {
   return (
     <main className="main">
       <h1>Home</h1>
-      <p className="muted">Server Component reading shared server modules (same data as GET /api/status).</p>
+      <p className="muted">
+        Server Component reading shared server modules (same data as GET /api/status).
+      </p>
       <pre className="block">{JSON.stringify(status, null, 2)}</pre>
 
       <h2 className="h2">Rendering</h2>

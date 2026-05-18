@@ -11,7 +11,8 @@ export default async function Page({ params }: { params: Promise<{ slug: string 
     <main className="main">
       <h1>SSG · [slug]</h1>
       <p className="muted">
-        <code>generateStaticParams</code> — prebuilt paths at build (<code>alpha</code>, <code>beta</code>).
+        <code>generateStaticParams</code> — prebuilt paths at build (<code>alpha</code>,{" "}
+        <code>beta</code>).
       </p>
       <pre className="block">{JSON.stringify({ slug }, null, 2)}</pre>
       <p>
