@@ -29,6 +29,10 @@
       "types": "./dist/adapters.d.mts",
       "import": "./dist/adapters.mjs"
     },
+    "./config": {
+      "types": "./dist/config.d.mts",
+      "import": "./dist/config.mjs"
+    },
     "./package.json": "./package.json"
   },
   "scripts": {

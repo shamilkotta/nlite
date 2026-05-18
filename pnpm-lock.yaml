@@ -20,6 +20,9 @@ importers:
 
   examples/v2:
     dependencies:
+      '@cloudflare/vite-plugin':
+        specifier: ^1.37.1
+        version: 1.37.1(vite@8.0.8(@types/node@24.12.2)(esbuild@0.27.3)(tsx@4.19.3))(workerd@1.20260515.1)(wrangler@4.92.0)
       nlite:
         specifier: workspace:*
         version: link:../../packages/nlite
@@ -45,6 +48,9 @@ importers:
 
   packages/nlite:
     dependencies:
+      '@vitejs/plugin-react':
+        specifier: ^6.0.1
+        version: 6.0.1(vite@8.0.8(@types/node@24.12.2)(esbuild@0.27.3)(tsx@4.19.3))
       '@vitejs/plugin-rsc':
         specifier: ^0.5.23
         version: 0.5.23(react-dom@19.2.5(react@19.2.5))(react@19.2.5)(vite@8.0.8(@types/node@24.12.2)(esbuild@0.27.3)(tsx@4.19.3))
@@ -54,6 +60,12 @@ importers:
       react-dom:
         specifier: ^19.2.5
         version: 19.2.5(react@19.2.5)
+      tinyglobby:
+        specifier: ^0.2.16
+        version: 0.2.16
+      vite:
+        specifier: ^8.0.8
+        version: 8.0.8(@types/node@24.12.2)(esbuild@0.27.3)(tsx@4.19.3)
     devDependencies:
       '@cloudflare/vite-plugin':
         specifier: ^1.37.1
@@ -67,21 +79,12 @@ importers:
       '@types/react-dom':
         specifier: ^19.2.2
         version: 19.2.3(@types/react@19.2.14)
-      '@vitejs/plugin-react':
-        specifier: ^6.0.1
-        version: 6.0.1(vite@8.0.8(@types/node@24.12.2)(esbuild@0.27.3)(tsx@4.19.3))
-      tinyglobby:
-        specifier: ^0.2.16
-        version: 0.2.16
       tsdown:
         specifier: ^0.21.7
         version: 0.21.7(@emnapi/core@1.9.2)(@emnapi/runtime@1.9.2)(typescript@5.9.3)
       typescript:
         specifier: ^5.9.3
         version: 5.9.3
-      vite:
-        specifier: ^8.0.8
-        version: 8.0.8(@types/node@24.12.2)(esbuild@0.27.3)(tsx@4.19.3)
 
 packages:
 

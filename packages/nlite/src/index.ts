@@ -1,4 +1,3 @@
-export { defineConfig, mergeConfig } from "./config.js";
 export type {
   NliteRouter,
   NavigateOptions,
