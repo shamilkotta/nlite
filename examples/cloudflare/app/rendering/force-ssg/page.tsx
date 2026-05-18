@@ -3,8 +3,10 @@ import { formatTime } from "../../../lib/content";
 
 export const rendering = "force-ssg";
 
-export default function ForceSsgPage() {
-  const generatedAt = formatTime();
+export default async function ForceSsgPage() {
+  const generatedAt = await new Promise<string>((resolve) =>
+    setTimeout(() => resolve(formatTime()), 1000),
+  );
 
   return (
     <section className="stack">
