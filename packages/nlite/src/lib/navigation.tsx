@@ -13,7 +13,18 @@ interface NavigationSnapshot {
 const listeners = new Set<() => void>();
 
 let navigationSnapshot = readSnapshot();
+const NAVIGATION_RUNTIME_KEY = "__NLITE_NAVIGATION_RUNTIME__";
 let navigationRuntime: NavigationRuntime | undefined;
+
+function getNavigationRuntime() {
+  if (navigationRuntime) {
+    return navigationRuntime;
+  }
+
+  return (globalThis as unknown as Record<string, NavigationRuntime | undefined>)[
+    NAVIGATION_RUNTIME_KEY
+  ];
+}
 
 export interface NavigationRuntime {
   push: (href: string, options?: RouterNavigateOptions) => void;
@@ -26,27 +37,28 @@ export interface NavigationRuntime {
 
 const router: NliteRouter = {
   push(href, options) {
-    navigationRuntime?.push(href, options);
+    getNavigationRuntime()?.push(href, options);
   },
   replace(href, options) {
-    navigationRuntime?.replace(href, options);
+    getNavigationRuntime()?.replace(href, options);
   },
   back() {
-    navigationRuntime?.back();
+    getNavigationRuntime()?.back();
   },
   forward() {
-    navigationRuntime?.forward();
+    getNavigationRuntime()?.forward();
   },
   refresh() {
-    navigationRuntime?.refresh();
+    getNavigationRuntime()?.refresh();
   },
   async prefetch(href) {
-    await navigationRuntime?.prefetch(href);
+    await getNavigationRuntime()?.prefetch(href);
   },
 };
 
 export function setNavigationRuntime(runtime: NavigationRuntime) {
   navigationRuntime = runtime;
+  (globalThis as unknown as Record<string, NavigationRuntime>)[NAVIGATION_RUNTIME_KEY] = runtime;
 }
 
 export function useRouter() {
