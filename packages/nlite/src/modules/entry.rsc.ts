@@ -5,6 +5,7 @@ import { createClientManifest } from "@vitejs/plugin-rsc/core/rsc";
 import routes from "virtual:nlite/routes";
 import { collectStaticPaths, createRouteElement, matchRoute } from "../runtime.js";
 import type { RscPayload } from "../types.js";
+import { STALE_TIME_HEADER } from "../utils/constants.js";
 
 type WorkerEnv = {
   ASSETS?: {
@@ -90,7 +91,10 @@ export async function handler(request: Request, env?: WorkerEnv) {
 
   if (renderRequest.isRsc) {
     return new Response(rscStream, {
-      headers: { "content-type": "text/x-component;charset=utf-8" },
+      headers: {
+        "content-type": "text/x-component;charset=utf-8",
+        [STALE_TIME_HEADER]: String(getRouteStaleTimeSeconds(match.route)),
+      },
     });
   }
 
@@ -270,4 +274,13 @@ function parseRenderRequest(request: Request, pathname = new URL(request.url).pa
     pathname: pagePathname,
     url,
   };
+}
+
+// TODO: its not right, not taking account of dynamic ssg
+function getRouteStaleTimeSeconds(route: (typeof routes)[number]) {
+  if (route.rendering === "force-ssg") {
+    return __NLITE_STALE_TIMES__.static;
+  }
+
+  return __NLITE_STALE_TIMES__.dynamic;
 }

@@ -60,8 +60,14 @@ export interface NliteRouteMatch {
   params: RouteParams;
 }
 
+export interface StaleTimes {
+  static?: number;
+  dynamic?: number;
+}
+
 export interface NliteOptions {
   appDir?: string;
+  staleTimes?: StaleTimes;
 }
 
 export type ApiRouteHandler = (

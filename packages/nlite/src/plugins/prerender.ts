@@ -11,11 +11,13 @@ import {
   PRERENDER_ORIGIN,
   PRERENDER_PROBE_TIMEOUT_MS,
   NOT_FOUND_HTML,
+  resolveStaleTimes,
 } from "../utils/constants.js";
-import type { PrerenderPath } from "../types.js";
+import { writeAssetHeaders } from "../utils/headers.js";
+import type { NliteOptions, PrerenderPath } from "../types.js";
 import { normalizeHtmlFilePath, normalizeRoutePath, normalizeRscFilePath } from "../utils/path.js";
 
-export function prerender(): Plugin {
+export function prerender(options: NliteOptions = {}): Plugin {
   return {
     name: "nlite:prerender",
     config: {
@@ -48,7 +50,7 @@ export function prerender(): Plugin {
     },
     buildApp: {
       async handler(builder) {
-        await renderStatic(builder.config);
+        await renderStatic(builder.config, options);
       },
     },
   };
@@ -90,7 +92,7 @@ function getPreviewHtmlRewrite(
   return `/${htmlRelative}${query}`;
 }
 
-async function renderStatic(config: ResolvedConfig) {
+async function renderStatic(config: ResolvedConfig, options: NliteOptions) {
   const entryPath = path.join(config.environments.rsc.build.outDir, "index.js");
   const entry: typeof import("../modules/entry.rsc.js") = await import(
     /* @vite-ignore */ pathToFileURL(entryPath).href
@@ -121,6 +123,8 @@ async function renderStatic(config: ResolvedConfig) {
   if (!existsSync(notFoundHtml)) {
     await writeFile(notFoundHtml, NOT_FOUND_HTML);
   }
+
+  await writeAssetHeaders(outDir, resolveStaleTimes(options.staleTimes).static);
 }
 
 function normalizePaths(paths: PrerenderPath[]) {

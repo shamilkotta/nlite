@@ -6,6 +6,7 @@ import rsc from "@vitejs/plugin-rsc";
 import type { ModuleNode, Plugin, PluginOption, ViteDevServer } from "vite";
 
 import { api } from "./api.js";
+import { resolveStaleTimes } from "../utils/constants.js";
 import { discoverRoutes } from "../utils/fs-routes.js";
 import { prerender } from "./prerender.js";
 import type { NliteOptions } from "../types.js";
@@ -31,6 +32,13 @@ export function nlite(options: NliteOptions = {}): PluginOption[] {
     enforce: "pre",
     applyToEnvironment(environment) {
       return environment.name !== "api";
+    },
+    config() {
+      return {
+        define: {
+          __NLITE_STALE_TIMES__: JSON.stringify(resolveStaleTimes(options.staleTimes)),
+        },
+      };
     },
     configResolved(config) {
       projectRoot = config.root;
@@ -85,7 +93,7 @@ export function nlite(options: NliteOptions = {}): PluginOption[] {
         client: path.join(__dirname, "modules", "entry.browser"),
       },
     }),
-    prerender(),
+    prerender(options),
     api(options),
   ];
 }

@@ -1,3 +1,8 @@
+declare const __NLITE_STALE_TIMES__: {
+  readonly static: number;
+  readonly dynamic: number;
+};
+
 declare module "virtual:nlite/routes" {
   const routes: import("./types.js").NliteRouteRecord[];
 

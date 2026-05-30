@@ -7,6 +7,7 @@ export type {
   RenderingMode,
   RouterNavigateOptions,
   RouteParams,
+  StaleTimes,
 } from "./types.js";
 export {
   ErrorBoundary,

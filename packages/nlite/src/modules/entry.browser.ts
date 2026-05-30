@@ -1,15 +1,14 @@
 import { startTransition } from "react";
 import { hydrateRoot, type Root } from "react-dom/client";
-import { createFromFetch, createFromReadableStream } from "@vitejs/plugin-rsc/browser";
+import { createFromReadableStream } from "@vitejs/plugin-rsc/browser";
 
 import {
   setNavigationRuntime,
   setNavigationSnapshot,
   type NavigationRuntime,
 } from "../lib/navigation.js";
+import { fetchRouteTree, invalidateRouteCache, prefetchRoute } from "../lib/route-cache.js";
 import type { RouterNavigateOptions, RscPayload } from "../types.js";
-
-const inflightPrefetches = new Map<string, Promise<unknown>>();
 
 let navigationRoot: Root | null = null;
 let navigationVersion = 0;
@@ -18,7 +17,7 @@ async function bootNavigation() {
   const inlineStream = window.__NLITE_READ_RSC__?.();
   const payload = inlineStream
     ? await createFromReadableStream(inlineStream)
-    : await fetchRouteTree(new URL(window.location.href));
+    : await fetchRouteTree(new URL(window.location.href), createRscHref);
 
   setNavigationSnapshot(new URL(window.location.href));
   navigationRoot = hydrateRoot(document, (payload as RscPayload).root);
@@ -34,6 +33,7 @@ async function bootNavigation() {
   if (import.meta.hot) {
     import.meta.hot.accept();
     import.meta.hot.on("rsc:update", async () => {
+      invalidateRouteCache();
       await refresh();
     });
   }
@@ -63,7 +63,7 @@ function createNavigationRuntime(): NavigationRuntime {
         return;
       }
 
-      await prefetchUrl(url);
+      await prefetchRoute(url, createRscHref);
     },
   };
 }
@@ -72,6 +72,7 @@ async function refresh() {
   await renderUrl(new URL(window.location.href), {
     updateHistory: false,
     scroll: false,
+    bypassCache: true,
   });
 }
 
@@ -106,10 +107,13 @@ async function renderUrl(
   options: {
     updateHistory: false | "push" | "replace";
     scroll: boolean;
+    bypassCache?: boolean;
   },
 ) {
   const version = ++navigationVersion;
-  const nextRoot = await fetchRouteTree(url);
+  const nextRoot = await fetchRouteTree(url, createRscHref, {
+    bypassCache: options.bypassCache,
+  });
 
   if (version !== navigationVersion) {
     return;
@@ -146,28 +150,6 @@ function updateBrowserHistory(url: URL, replace = false) {
 function createRscHref(url: URL) {
   const pathname = `${url.pathname}.rsc`;
   return `${pathname}${url.search}`;
-}
-
-function fetchRouteTree(url: URL) {
-  return createFromFetch(fetch(createRscHref(url)));
-}
-
-function prefetchUrl(url: URL) {
-  const key = `${url.pathname}${url.search}`;
-  const existing = inflightPrefetches.get(key);
-
-  if (existing) {
-    return existing;
-  }
-
-  const pending = fetch(createRscHref(url)).then(() => undefined);
-  inflightPrefetches.set(key, pending);
-
-  pending.finally(() => {
-    inflightPrefetches.delete(key);
-  });
-
-  return pending;
 }
 
 function scrollToTarget(hash: string) {
