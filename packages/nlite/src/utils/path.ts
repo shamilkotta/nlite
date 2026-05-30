@@ -1,6 +1,5 @@
 import type { RouteParams } from "../types.js";
-
-export const RSC_POSTFIX = ".rsc";
+import { RSC_POSTFIX } from "./constants.js";
 
 export function normalizeRoutePath(routePath: string) {
   if (!routePath || routePath === "/") {
@@ -21,7 +20,7 @@ export function normalizeHtmlFilePath(routePath: string) {
 
 export function normalizeRscFilePath(routePath: string) {
   if (routePath === "/") {
-    return "index" + RSC_POSTFIX;
+    return "" + RSC_POSTFIX;
   }
 
   return routePath.slice(1) + RSC_POSTFIX;

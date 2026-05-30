@@ -37,7 +37,6 @@ export function prerender(options: NliteOptions = {}): Plugin {
         server.config.environments.client.build.outDir,
       );
 
-      // rewrite clean URLs to prerendered html files
       server.middlewares.use((req, _res, next) => {
         const htmlPath = getPreviewHtmlRewrite(req, distDir);
 
@@ -77,10 +76,9 @@ function getPreviewHtmlRewrite(
   const { pathname, query } = parsedUrl;
 
   if (
-    pathname === "" ||
-    pathname === "/" ||
     pathname.startsWith("/api/") ||
-    Boolean(path.extname(pathname))
+    Boolean(path.extname(pathname)) ||
+    pathname.split("/").pop()?.includes(".")
   )
     return;
 
