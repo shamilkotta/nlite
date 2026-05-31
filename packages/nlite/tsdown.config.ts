@@ -6,6 +6,7 @@ export default defineConfig((_opt): UserConfig[] => [
       index: "./src/index.ts",
       "lib/link": "./src/lib/link.tsx",
       "lib/navigation": "./src/lib/navigation.tsx",
+      "lib/headers": "./src/lib/headers.ts",
       config: "./src/config.ts",
       "internal/default-config": "./src/internal/default-config.ts",
       runtime: "./src/runtime.tsx",

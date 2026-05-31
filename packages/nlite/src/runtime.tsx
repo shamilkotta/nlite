@@ -1,6 +1,7 @@
 import React, { Suspense } from "react";
 
 import { ErrorBoundary } from "./lib/errorBoundary.js";
+import { trackSearchParams } from "./internal/request-context.js";
 import { compileRoutePath, matchCompiledPath } from "./utils/path.js";
 import type {
   NliteRouteSegmentModule,
@@ -50,9 +51,10 @@ export function createRouteElement(
   params: RouteParams,
   searchParams: URLSearchParams = new URLSearchParams(),
 ) {
+  const trackedSearchParams = trackSearchParams(searchParams);
   let element: React.ReactElement = React.createElement(route.page.default, {
     params: Promise.resolve(params),
-    searchParams: Promise.resolve(searchParams),
+    searchParams: trackedSearchParams,
   });
 
   for (const segment of [...route.tree].reverse()) {
@@ -72,7 +74,7 @@ export function createRouteElement(
       element = React.createElement(segment.layout.default, {
         children: element,
         params: Promise.resolve(params),
-        searchParams: Promise.resolve(searchParams),
+        searchParams: trackedSearchParams,
       });
     }
   }
@@ -91,6 +93,16 @@ export async function collectStaticPaths(routes: NliteRouteRecord[]) {
     const generator = route.page.generateStaticParams;
 
     if (!generator) {
+      if (route.paramNames.length > 0) {
+        if (route.rendering === "force-ssg") {
+          throw new Error(
+            `Route "${route.routePath}" uses force-ssg but does not export generateStaticParams()`,
+          );
+        }
+
+        continue;
+      }
+
       output.push({
         path: route.routePath,
         forcePrerender: route.rendering === "force-ssg",

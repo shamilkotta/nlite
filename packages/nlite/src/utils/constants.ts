@@ -2,7 +2,6 @@ import type { StaleTimes } from "../types.js";
 
 export const FILE_EXTENSIONS = ["tsx", "ts", "jsx", "js"];
 export const PRERENDER_ORIGIN = "http://nlite.local";
-export const PRERENDER_PROBE_TIMEOUT_MS = 30_000;
 export const NOT_FOUND_HTML = "<!doctype html><title>404</title><h1>Not Found</h1>\n";
 export const STALE_TIME_HEADER = "x-nlite-staletime";
 export const RSC_POSTFIX = ".rsc";

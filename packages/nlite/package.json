@@ -49,6 +49,10 @@
       "types": "./dist/lib/navigation.d.mts",
       "import": "./dist/lib/navigation.mjs"
     },
+    "./headers": {
+      "types": "./dist/lib/headers.d.mts",
+      "import": "./dist/lib/headers.mjs"
+    },
     "./adapters": {
       "types": "./dist/adapters.d.mts",
       "import": "./dist/adapters.mjs"

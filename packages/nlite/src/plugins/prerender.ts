@@ -1,18 +1,12 @@
 import { existsSync } from "node:fs";
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { spawn } from "node:child_process";
 import { Readable } from "node:stream";
 import type { ReadableStream as NodeReadableStream } from "node:stream/web";
 import { pathToFileURL } from "node:url";
 import type { ConfigEnv, Plugin, ResolvedConfig, UserConfig } from "vite";
 
-import {
-  PRERENDER_ORIGIN,
-  PRERENDER_PROBE_TIMEOUT_MS,
-  NOT_FOUND_HTML,
-  resolveStaleTimes,
-} from "../utils/constants.js";
+import { PRERENDER_ORIGIN, NOT_FOUND_HTML, resolveStaleTimes } from "../utils/constants.js";
 import { writeAssetHeaders } from "../utils/headers.js";
 import type { NliteOptions, PrerenderPath } from "../types.js";
 import { normalizeHtmlFilePath, normalizeRoutePath, normalizeRscFilePath } from "../utils/path.js";
@@ -105,10 +99,8 @@ async function renderStatic(config: ResolvedConfig, options: NliteOptions) {
 
   for (const { path: routePath, forcePrerender } of staticPaths) {
     const request = new Request(new URL(routePath, PRERENDER_ORIGIN));
-    const shouldPrerender = forcePrerender || (await probePrerenderRoute(entryPath, routePath));
-    if (!shouldPrerender) continue;
 
-    const { rsc, stream, skip } = await entry.handlePrerender(request);
+    const { rsc, stream, skip } = await entry.handlePrerender(request, { forcePrerender });
     if (skip || !stream || !rsc) continue;
 
     await Promise.all([
@@ -146,81 +138,6 @@ async function writeStreamToFile(filePath: string, stream: ReadableStream<Uint8A
   await writeFile(filePath, Readable.fromWeb(stream as NodeReadableStream<Uint8Array>));
 }
 
-async function probePrerenderRoute(entryPath: string, routePath: string) {
-  const entryUrl = pathToFileURL(entryPath).href;
-  const routeUrl = new URL(routePath, PRERENDER_ORIGIN).href;
-  const script = `
-    const entry = await import(${JSON.stringify(entryUrl)});
-    const result = await entry.probePrerender(new Request(${JSON.stringify(routeUrl)}));
-    if (process.send) process.send({ type: "result", result });
-    process.exit(result ? 0 : 2);
-  `;
-
-  return new Promise<boolean>((resolve, reject) => {
-    let settled = false;
-    const child = spawn(process.execPath, ["--input-type=module", "--eval", script], {
-      stdio: ["ignore", "ignore", "inherit", "ipc"],
-      env: process.env,
-    });
-
-    const timeout = setTimeout(() => {
-      settled = true;
-      child.kill("SIGKILL");
-      resolve(false);
-    }, PRERENDER_PROBE_TIMEOUT_MS);
-
-    const settle = (result: boolean) => {
-      if (settled) {
-        return;
-      }
-
-      settled = true;
-      clearTimeout(timeout);
-      resolve(result);
-    };
-
-    const fail = (error: Error) => {
-      if (settled) {
-        return;
-      }
-
-      settled = true;
-      clearTimeout(timeout);
-      reject(error);
-    };
-
-    child.on("message", (message) => {
-      const result = readProbeResult(message);
-
-      if (result !== undefined) {
-        settle(result);
-      }
-    });
-
-    child.on("error", (error) => {
-      fail(error);
-    });
-
-    child.on("exit", (code, signal) => {
-      if (settled) {
-        return;
-      }
-
-      if (signal) {
-        settle(false);
-        return;
-      }
-
-      if (code === 0 || code === 2) {
-        settle(code === 0);
-        return;
-      }
-
-      fail(new Error(`Prerender probe failed for "${routePath}" with exit code ${code}`));
-    });
-  });
-}
-
 function parseRequestUrl(rawUrl: string | undefined) {
   if (!rawUrl) {
     return;
@@ -237,18 +154,4 @@ function parseRequestUrl(rawUrl: string | undefined) {
   } catch {
     return;
   }
-}
-
-function readProbeResult(message: unknown) {
-  if (
-    !message ||
-    typeof message !== "object" ||
-    !("type" in message) ||
-    message.type !== "result" ||
-    !("result" in message)
-  ) {
-    return;
-  }
-
-  return Boolean(message.result);
 }
