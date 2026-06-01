@@ -1,16 +1,27 @@
 import Link from "nlite/link";
 
+import { RenderProbe } from "../../../components/render-probe";
+import { getRenderTimestamp } from "../../../lib/server/render-proof";
+
 export const rendering = "force-ssr";
 
 export default async function Page() {
+  const renderedAt = getRenderTimestamp();
+
   return (
     <main className="main">
       <h1>force-ssr</h1>
       <p className="muted">
-        <code>rendering = &quot;force-ssr&quot;</code> — skipped at build; rendered on each request.
+        <code>rendering = &quot;force-ssr&quot;</code> skips build prerender. No request APIs on
+        this page — only a per-request timestamp proves SSR.
       </p>
-      <pre className="block">{new Date().toISOString()}</pre>
+
+      <pre className="block">{JSON.stringify({ signal: "force-ssr", renderedAt }, null, 2)}</pre>
+      <RenderProbe serverRenderedAt={renderedAt} expected="live" />
+
       <p>
+        <Link href="/examples/force-ssg">Compare force-ssg</Link>
+        {" · "}
         <Link href="/examples">← Examples</Link>
       </p>
     </main>
