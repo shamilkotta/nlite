@@ -167,7 +167,13 @@ export async function collectPrerenderPaths() {
   return collectStaticPaths(routes);
 }
 
-export async function handlePrerender(request: Request, options: { forcePrerender?: boolean }) {
+export async function handlePrerender(
+  request: Request,
+  options: {
+    forcePrerender?: boolean;
+    onDynamicUsage?: () => void;
+  },
+) {
   const renderRequest = parseRenderRequest(request);
   const match = matchRoute(routes, renderRequest.pathname);
 
@@ -175,6 +181,7 @@ export async function handlePrerender(request: Request, options: { forcePrerende
     throw new Error('Cannot prerender unknown route "' + renderRequest.pathname + '"');
   }
 
+  const controller = new AbortController();
   const dynamicUsage = new DynamicPrerenderUsageError();
   const [prerenderResult, error] = await tryCatch(
     runWithRequestContext(
@@ -189,7 +196,12 @@ export async function handlePrerender(request: Request, options: { forcePrerende
           const rscPayload = { root: documentNode };
 
           return prerender<RscPayload>(rscPayload, createClientManifest(), {
+            signal: controller.signal,
             onError: (error) => {
+              if (error instanceof DynamicPrerenderUsageError) {
+                return;
+              }
+
               throw error;
             },
           });
@@ -197,10 +209,10 @@ export async function handlePrerender(request: Request, options: { forcePrerende
       {
         searchParams: renderRequest.url.searchParams,
         onDynamicUsage() {
-          if (options.forcePrerender) {
-            return;
+          if (!options.forcePrerender) {
+            options.onDynamicUsage?.();
+            controller.abort(dynamicUsage);
           }
-          throw dynamicUsage;
         },
       },
     ),
@@ -211,6 +223,10 @@ export async function handlePrerender(request: Request, options: { forcePrerende
       return { stream: null, rsc: null, skip: true };
     }
     throw error;
+  }
+
+  if (controller.signal.aborted && controller.signal.reason instanceof DynamicPrerenderUsageError) {
+    return { stream: null, rsc: null, skip: true };
   }
 
   if (!prerenderResult || !prerenderResult?.prelude) {

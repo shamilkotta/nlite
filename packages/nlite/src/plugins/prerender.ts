@@ -1,15 +1,15 @@
 import { existsSync } from "node:fs";
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { Readable } from "node:stream";
-import type { ReadableStream as NodeReadableStream } from "node:stream/web";
-import { pathToFileURL } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import type { ConfigEnv, Plugin, ResolvedConfig, UserConfig } from "vite";
 
-import { PRERENDER_ORIGIN, NOT_FOUND_HTML, resolveStaleTimes } from "../utils/constants.js";
+import { NOT_FOUND_HTML, resolveStaleTimes } from "../utils/constants.js";
 import { writeAssetHeaders } from "../utils/headers.js";
 import type { NliteOptions, PrerenderPath } from "../types.js";
 import { normalizeHtmlFilePath, normalizeRoutePath, normalizeRscFilePath } from "../utils/path.js";
+import { createWorker, type WorkerProxy } from "../lib/worker/index.js";
+import type { PrerenderWorker } from "../internal/prerender-worker.js";
 
 export function prerender(options: NliteOptions = {}): Plugin {
   return {
@@ -96,17 +96,25 @@ async function renderStatic(config: ResolvedConfig, options: NliteOptions) {
 
   const staticPaths = normalizePaths(await entry.collectPrerenderPaths());
   const outDir = path.resolve(config.environments.client.build.outDir);
+  const worker = createPrerenderWorker();
 
-  for (const { path: routePath, forcePrerender } of staticPaths) {
-    const request = new Request(new URL(routePath, PRERENDER_ORIGIN));
+  try {
+    for (const { path: routePath, forcePrerender } of staticPaths) {
+      const result = await worker.renderRoute({
+        entryPath,
+        routePath,
+        forcePrerender,
+      });
 
-    const { rsc, stream, skip } = await entry.handlePrerender(request, { forcePrerender });
-    if (skip || !stream || !rsc) continue;
+      if (result.skip) continue;
 
-    await Promise.all([
-      writeStreamToFile(path.join(outDir, normalizeHtmlFilePath(routePath)), stream),
-      writeStreamToFile(path.join(outDir, normalizeRscFilePath(routePath)), rsc),
-    ]);
+      await Promise.all([
+        writeBytesToFile(path.join(outDir, normalizeHtmlFilePath(routePath)), result.stream),
+        writeBytesToFile(path.join(outDir, normalizeRscFilePath(routePath)), result.rsc),
+      ]);
+    }
+  } finally {
+    worker.end();
   }
 
   const notFoundHtml = path.join(outDir, "404.html");
@@ -133,9 +141,9 @@ function normalizePaths(paths: PrerenderPath[]) {
   return [...byPath.values()].sort((left, right) => left.path.localeCompare(right.path));
 }
 
-async function writeStreamToFile(filePath: string, stream: ReadableStream<Uint8Array>) {
+async function writeBytesToFile(filePath: string, bytes: number[]) {
   await mkdir(path.dirname(filePath), { recursive: true });
-  await writeFile(filePath, Readable.fromWeb(stream as NodeReadableStream<Uint8Array>));
+  await writeFile(filePath, Uint8Array.from(bytes));
 }
 
 function parseRequestUrl(rawUrl: string | undefined) {
@@ -154,4 +162,19 @@ function parseRequestUrl(rawUrl: string | undefined) {
   } catch {
     return;
   }
+}
+
+function createPrerenderWorker(): WorkerProxy<PrerenderWorker> {
+  const currentDir = path.dirname(fileURLToPath(import.meta.url));
+  return createWorker<PrerenderWorker>(path.join(currentDir, "internal", "prerender-worker.mjs"), {
+    exposedMethods: ["renderRoute"],
+    onChildMessage(message, { resolve }) {
+      if (message && (message as { type?: string }).type === "dynamicUsage") {
+        resolve({ skip: true });
+        return true;
+      }
+
+      return false;
+    },
+  });
 }

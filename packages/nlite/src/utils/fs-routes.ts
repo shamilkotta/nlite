@@ -3,6 +3,7 @@ import path from "node:path";
 
 import { FILE_EXTENSIONS } from "./constants.js";
 import { glob } from "tinyglobby";
+import { tryCatch } from "./index.js";
 
 export interface RouteModuleFiles {
   page: string;
@@ -98,15 +99,12 @@ async function findConventionFile(dir: string, basename: string) {
   for (const extension of FILE_EXTENSIONS) {
     const candidate = path.join(dir, `${basename}.${extension}`);
 
-    try {
-      await access(candidate);
-      return candidate;
-    } catch {
-      continue;
-    }
+    const [_, error] = await tryCatch(access(candidate));
+    if (error) continue;
+    return candidate;
   }
 
-  return undefined;
+  return;
 }
 
 function toRoutePath(appRoot: string, conventionFile: string) {

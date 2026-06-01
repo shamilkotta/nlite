@@ -73,7 +73,7 @@ function routeParamsFromH3(
   h3Params: Record<string, string> | undefined,
   catchAllParamNames: string[],
 ) {
-  const params: RouteParams = { ...(h3Params ?? {}) };
+  const params: RouteParams = { ...h3Params };
 
   if (catchAllParamNames.length > 0 && typeof params._ === "string") {
     const catchAllName = catchAllParamNames[0]!;
