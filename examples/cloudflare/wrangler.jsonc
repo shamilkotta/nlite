@@ -1,6 +1,6 @@
 {
   "$schema": "./node_modules/wrangler/config-schema.json",
-  "name": "nlite-cf",
+  "name": "basic-nlite",
   "compatibility_date": "2026-05-17",
   "compatibility_flags": ["nodejs_compat"],
   "workers_dev": true,

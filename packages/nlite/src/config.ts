@@ -37,6 +37,7 @@ function withNlitePlugin(config: NliteUserConfig) {
   const { nlite: nliteOptions, plugins = [], ...rest } = config;
 
   return mergeConfig(rest, {
+    nlite: nliteOptions,
     customLogger,
     build: {
       outDir: ".nlite",
