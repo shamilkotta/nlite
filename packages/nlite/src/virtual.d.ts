@@ -17,6 +17,21 @@ declare module "virtual:nlite/api" {
   export { apiHandler, couldMatchApi };
 }
 
+declare module "virtual:nlite/content" {
+  const collections: Record<
+    string,
+    Array<{
+      id: string;
+      slug: string;
+      body: string;
+      data: unknown;
+      load: () => Promise<{ default: import("react").ComponentType }>;
+    }>
+  >;
+
+  export { collections };
+}
+
 declare module "@vitejs/plugin-rsc/vendor/react-server-dom/static.edge" {
   export function prerender<TModel>(
     model: TModel,

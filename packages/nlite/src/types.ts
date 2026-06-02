@@ -65,9 +65,40 @@ export interface StaleTimes {
   dynamic?: number;
 }
 
+export interface CollectionSchemaSuccess<TOutput> {
+  success: true;
+  data?: TOutput;
+  output?: TOutput;
+}
+
+export interface CollectionSchemaFailure {
+  success: false;
+  error: unknown;
+}
+
+export interface CollectionSchemaLike<TOutput = unknown> {
+  parse?: (input: unknown) => TOutput;
+  safeParse?: (input: unknown) => CollectionSchemaSuccess<TOutput> | CollectionSchemaFailure;
+}
+
+export interface CollectionDefinition<TOutput = unknown> {
+  schema?: CollectionSchemaLike<TOutput>;
+}
+
+export type CollectionRecord = Record<string, CollectionDefinition<unknown>>;
+
 export interface NliteOptions {
   appDir?: string;
   staleTimes?: StaleTimes;
+}
+
+export interface NliteContentEntry<TData = unknown> {
+  id: string;
+  collection: string;
+  slug: string;
+  body: string;
+  data: TData;
+  Content: ComponentType;
 }
 
 export type ApiRouteHandler = (

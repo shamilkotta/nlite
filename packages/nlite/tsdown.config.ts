@@ -8,6 +8,7 @@ export default defineConfig((_opt): UserConfig[] => [
       "lib/navigation": "./src/lib/navigation.tsx",
       "lib/headers": "./src/lib/headers.ts",
       "lib/worker/*": "./src/lib/worker/*.ts",
+      "lib/mdx": "./src/lib/mdx/index.ts",
       config: "./src/config.ts",
       "internal/default-config": "./src/internal/default-config.ts",
       "internal/prerender-worker": "./src/internal/prerender-worker.ts",
@@ -19,7 +20,7 @@ export default defineConfig((_opt): UserConfig[] => [
     },
     dts: true,
     deps: {
-      neverBundle: ["virtual:nlite/routes", "virtual:nlite/api", "nlite"],
+      neverBundle: ["virtual:nlite/routes", "virtual:nlite/api", "virtual:nlite/content", "nlite"],
     },
     format: "esm",
     outDir: "dist",

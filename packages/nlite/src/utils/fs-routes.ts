@@ -133,7 +133,7 @@ function toRoutePath(appRoot: string, conventionFile: string) {
   return `/${segments.join("/")}`;
 }
 
-function toPosix(value: string) {
+export function toPosix(value: string) {
   return value.split(path.sep).join("/");
 }
 

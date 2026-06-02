@@ -4,6 +4,8 @@ import type { Plugin, PluginOption, ResolvedConfig } from "vite";
 
 import type { NliteOptions } from "../types.js";
 import { resolveStaleTimes, STALE_TIME_HEADER } from "../utils/constants.js";
+import { toPosix } from "../utils/fs-routes.js";
+import { tryCatch } from "../utils/index.js";
 
 export interface VercelAdapterOptions {
   runtime?: "edge";
@@ -159,15 +161,10 @@ async function collectStaticFiles(directory: string): Promise<string[]> {
   return files.flat();
 }
 
-function toPosix(value: string) {
-  return value.split(path.sep).join("/");
-}
-
 async function exists(filePath: string) {
-  try {
-    await fs.access(filePath);
-    return true;
-  } catch {
+  const [_, error] = await tryCatch(fs.access(filePath));
+  if (error) {
     return false;
   }
+  return true;
 }
