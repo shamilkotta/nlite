@@ -6,7 +6,12 @@ import matter from "gray-matter";
 import { glob } from "tinyglobby";
 import type { ModuleNode, Plugin, PluginOption, ResolvedConfig, ViteDevServer } from "vite";
 
-import type { CollectionDefinition, CollectionRecord, CollectionSchemaLike } from "../types.js";
+import type {
+  CollectionDefinition,
+  CollectionRecord,
+  CollectionSchemaLike,
+  CollectionSourceConfig,
+} from "../types.js";
 import { toPosix } from "../utils/fs-routes.js";
 
 const VIRTUAL_CONTENT_ID = "virtual:nlite/content";
@@ -42,9 +47,8 @@ export function mdx(options: NliteMdxOptions = {}): PluginOption[] {
     },
     configureServer(server) {
       const root = resolvedConfig?.root ?? server.config.root;
-      const contentDir = getContentDir(options);
-      const contentRoot = path.resolve(root, contentDir);
-      watchContentFiles(server, contentRoot, parseCache);
+      const watchRoots = resolveCollectionWatchRoots(root, options);
+      watchContentFiles(server, watchRoots, parseCache);
     },
     resolveId(id) {
       if (id === RESOLVED_CONTENT_ID) {
@@ -73,11 +77,11 @@ export function mdx(options: NliteMdxOptions = {}): PluginOption[] {
       }
 
       const root = resolvedConfig?.root ?? process.cwd();
-      const contentDir = path.resolve(root, getContentDir(options));
       const collections = options.collections ?? {};
 
       return await buildContentModule({
-        contentDir,
+        root,
+        options,
         collections,
         parseCache,
       });
@@ -98,13 +102,15 @@ function getContentDir(options: NliteMdxOptions) {
 
 function watchContentFiles(
   server: ViteDevServer,
-  contentRoot: string,
+  contentRoots: string[],
   parseCache: Map<string, ParsedContentFile>,
 ) {
-  server.watcher.add(contentRoot);
+  for (const contentRoot of contentRoots) {
+    server.watcher.add(contentRoot);
+  }
 
   const invalidateChangedContent = (file: string) =>
-    invalidateContent(server, contentRoot, file, parseCache);
+    invalidateContent(server, contentRoots, file, parseCache);
 
   server.watcher.on("add", invalidateChangedContent);
   server.watcher.on("change", invalidateChangedContent);
@@ -115,15 +121,16 @@ function watchContentFiles(
 
 function invalidateContent(
   server: ViteDevServer,
-  contentRoot: string,
+  contentRoots: string[],
   file: string,
   parseCache: Map<string, ParsedContentFile>,
 ) {
-  const relative = path.relative(contentRoot, file);
-  const isWithinContentRoot =
-    relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative));
+  const isWithinContentRoots = contentRoots.some((contentRoot) => {
+    const relative = path.relative(contentRoot, file);
+    return relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative));
+  });
 
-  if (!isWithinContentRoot) {
+  if (!isWithinContentRoots) {
     return;
   }
 
@@ -176,22 +183,24 @@ function getEnvironmentModuleGraph(environment: unknown): ModuleGraphLike | unde
 }
 
 async function buildContentModule({
-  contentDir,
+  root,
+  options,
   collections,
   parseCache,
 }: {
-  contentDir: string;
+  root: string;
+  options: NliteMdxOptions;
   collections: CollectionRecord;
   parseCache: Map<string, ParsedContentFile>;
 }) {
   const lines: string[] = ["export const collections = {"];
 
   for (const [collectionName, definition] of Object.entries(collections)) {
-    const collectionRoot = path.resolve(contentDir, collectionName);
-    const files = await glob("**/*.{md,mdx}", {
-      cwd: collectionRoot,
-      absolute: true,
-      onlyFiles: true,
+    const files = await resolveCollectionFiles({
+      root,
+      options,
+      collectionName,
+      definition,
     });
     const entries: string[] = [];
 
@@ -200,9 +209,7 @@ async function buildContentModule({
       const id = path.basename(file).replace(/\.(md|mdx)$/u, "");
       const frontmatter = parsed.frontmatter;
       const slug =
-        typeof frontmatter.slug === "string" && frontmatter.slug.length > 0
-          ? frontmatter.slug
-          : id;
+        typeof frontmatter.slug === "string" && frontmatter.slug.length > 0 ? frontmatter.slug : id;
       const validatedData = parseCollectionData(definition?.schema, frontmatter, file);
       const serializedData = serializeToModuleValue(validatedData);
       const serializedBody = JSON.stringify(parsed.body);
@@ -223,6 +230,133 @@ async function buildContentModule({
   lines.push("export default collections;");
 
   return lines.join("\n");
+}
+
+function resolveCollectionWatchRoots(root: string, options: NliteMdxOptions): string[] {
+  const collections = options.collections ?? {};
+  const roots = new Set<string>();
+
+  for (const [collectionName, definition] of Object.entries(collections)) {
+    for (const watchRoot of getCollectionWatchRoots(
+      root,
+      getContentDir(options),
+      collectionName,
+      definition,
+    )) {
+      roots.add(watchRoot);
+    }
+  }
+
+  if (roots.size === 0) {
+    roots.add(path.resolve(root, getContentDir(options)));
+  }
+
+  return [...roots];
+}
+
+function getCollectionWatchRoots(
+  root: string,
+  contentDir: string,
+  collectionName: string,
+  definition: CollectionDefinition<unknown>,
+) {
+  const source = definition.source;
+
+  if (!source) {
+    return [path.resolve(root, contentDir, collectionName)];
+  }
+
+  if (Array.isArray(source)) {
+    return source.map((pattern) => getWatchRootFromPattern(root, pattern));
+  }
+
+  if (typeof source === "string") {
+    return [getWatchRootFromPattern(root, source)];
+  }
+
+  return [path.resolve(root, source.cwd)];
+}
+
+function getWatchRootFromPattern(root: string, pattern: string) {
+  const wildcardIndex = pattern.search(/[*{[]/u);
+  const base = wildcardIndex === -1 ? pattern : pattern.slice(0, wildcardIndex);
+  return path.resolve(root, base || ".");
+}
+
+async function resolveCollectionFiles({
+  root,
+  options,
+  collectionName,
+  definition,
+}: {
+  root: string;
+  options: NliteMdxOptions;
+  collectionName: string;
+  definition: CollectionDefinition<unknown>;
+}) {
+  const source = definition.source;
+
+  if (!source) {
+    return await glob("**/*.{md,mdx}", {
+      cwd: path.resolve(root, getContentDir(options), collectionName),
+      absolute: true,
+      onlyFiles: true,
+    });
+  }
+
+  if (Array.isArray(source)) {
+    const results = await Promise.all(
+      source.map((pattern) =>
+        glob(pattern, {
+          cwd: root,
+          absolute: true,
+          onlyFiles: true,
+        }),
+      ),
+    );
+    return uniqueSortedFiles(results.flat());
+  }
+
+  if (typeof source === "string") {
+    return uniqueSortedFiles(
+      await glob(source, {
+        cwd: root,
+        absolute: true,
+        onlyFiles: true,
+      }),
+    );
+  }
+
+  return await resolveSourceConfigFiles(root, source);
+}
+
+async function resolveSourceConfigFiles(root: string, source: CollectionSourceConfig) {
+  const include = source.include
+    ? Array.isArray(source.include)
+      ? source.include
+      : [source.include]
+    : ["**/*.{md,mdx}"];
+  const ignore = source.exclude
+    ? Array.isArray(source.exclude)
+      ? source.exclude
+      : [source.exclude]
+    : [];
+
+  const files = await Promise.all(
+    include.map((pattern) =>
+      glob(pattern, {
+        cwd: path.resolve(root, source.cwd),
+        absolute: true,
+        onlyFiles: true,
+        ignore,
+      }),
+    ),
+  );
+  return uniqueSortedFiles(files.flat());
+}
+
+function uniqueSortedFiles(files: string[]) {
+  return [...new Set(files)].sort();
 }
 
 async function readParsedContentFile(

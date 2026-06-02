@@ -82,10 +82,17 @@ export interface CollectionSchemaLike<TOutput = unknown> {
 }
 
 export interface CollectionDefinition<TOutput = unknown> {
+  source?: string | string[] | CollectionSourceConfig;
   schema?: CollectionSchemaLike<TOutput>;
 }
 
 export type CollectionRecord = Record<string, CollectionDefinition<unknown>>;
+
+export interface CollectionSourceConfig {
+  cwd: string;
+  include?: string | string[];
+  exclude?: string | string[];
+}
 
 export interface NliteOptions {
   appDir?: string;

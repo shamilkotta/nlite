@@ -3,6 +3,7 @@ export { getCollection, getEntry } from "./content.js";
 export type {
   CollectionDefinition,
   CollectionRecord,
+  CollectionSourceConfig,
   CollectionSchemaLike,
   NliteContentEntry,
 } from "../../types.js";

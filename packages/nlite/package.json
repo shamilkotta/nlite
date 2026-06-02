@@ -91,10 +91,10 @@
   },
   "peerDependencies": {
     "@cloudflare/vite-plugin": "^1.37.1",
-    "react": "^19.2.5",
-    "react-dom": "^19.2.5",
     "@mdx-js/rollup": "^3.1.1",
-    "gray-matter": "^4.0.3"
+    "gray-matter": "^4.0.3",
+    "react": "^19.2.5",
+    "react-dom": "^19.2.5"
   },
   "peerDependenciesMeta": {
     "@cloudflare/vite-plugin": {
