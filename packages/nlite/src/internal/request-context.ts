@@ -135,6 +135,5 @@ function parseCookies(header: string | null) {
 function isDynamicFetch(input: RequestInfo | URL, init?: RequestInit) {
   const cache = init?.cache ?? (input instanceof Request ? input.cache : undefined);
 
-  // TODO: other cache options (eg: no-cache, force-cache)
-  return cache === undefined || cache === "no-store" || cache === "reload";
+  return cache !== "force-cache" && cache !== "only-if-cached";
 }
