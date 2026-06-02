@@ -46,6 +46,10 @@ export default async function Page() {
           <Link href="/examples/server-fetch">server-fetch</Link>
           <span className="muted"> — fetch() → auto SSR</span>
         </li>
+        <li>
+          <Link href="/examples/blog">blog</Link>
+          <span className="muted"> — markdown/mdx collections API</span>
+        </li>
       </ul>
 
       <p>

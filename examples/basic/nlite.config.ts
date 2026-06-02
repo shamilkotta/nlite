@@ -1,9 +1,26 @@
 import { defineConfig } from "nlite/config";
 import path from "node:path";
-import { vercel } from "nlite/adapters";
+import { defineCollection, mdx } from "nlite/mdx";
+import { z } from "zod";
 
 export default defineConfig({
-  plugins: [vercel()],
+  plugins: [
+    mdx({
+      collections: {
+        blog: defineCollection({
+          source: "app/examples/blog/**/*.{md,mdx}",
+          schema: z.object({
+            title: z.string(),
+            description: z.string(),
+            publishedAt: z.coerce.date(),
+            tags: z.array(z.string()).default([]),
+            draft: z.boolean().default(false),
+          }),
+        }),
+      },
+    }),
+    // vercel(),
+  ],
   staleTimes: {
     static: 600,
   },

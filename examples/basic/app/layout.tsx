@@ -13,7 +13,7 @@ export default function RootLayout({ children }: PropsWithChildren) {
         <nav className="head-nav">
           <Link href="/">Home</Link>
           <Link href="/examples">Examples</Link>
-          <Link href="/users/alice">users/[id]</Link>
+          <Link href="/examples/blog">blog</Link>
         </nav>
       </header>
       {children}

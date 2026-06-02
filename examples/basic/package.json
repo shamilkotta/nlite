@@ -10,7 +10,8 @@
   "dependencies": {
     "nlite": "workspace:*",
     "react": "^19.2.5",
-    "react-dom": "^19.2.5"
+    "react-dom": "^19.2.5",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@types/react": "^19.2.2",
