@@ -4,17 +4,22 @@ import {
   mergeConfig,
   type ConfigEnv,
   type UserConfig,
-  type UserConfigExport,
 } from "vite";
 
 import { nlite } from "./plugins/index.js";
 import type { NliteOptions } from "./types.js";
 
-export interface NliteUserConfig extends UserConfig {
-  nlite?: NliteOptions;
+export interface NliteUserConfig extends NliteOptions {
+  plugins?: UserConfig["plugins"];
+  vite?: UserConfig;
 }
 
-export function defineConfig(config: NliteUserConfig) {
+type NliteUserConfigExport =
+  | NliteUserConfig
+  | Promise<NliteUserConfig>
+  | ((env: ConfigEnv) => NliteUserConfig | Promise<NliteUserConfig>);
+
+export function defineConfig(config: NliteUserConfigExport) {
   return defineViteConfig(async (env) => {
     const resolved = await resolveConfig(config, env);
     return withNlitePlugin(resolved);
@@ -23,20 +28,21 @@ export function defineConfig(config: NliteUserConfig) {
 
 export { mergeConfig };
 
-async function resolveConfig(config: UserConfigExport, env: ConfigEnv) {
+async function resolveConfig(config: NliteUserConfigExport, env: ConfigEnv) {
   if (typeof config === "function") {
-    return (await config(env)) as NliteUserConfig;
+    return await config(env);
   }
 
-  return (await config) as NliteUserConfig;
+  return await config;
 }
 
 const customLogger = createLogger("info", { prefix: "[NLITE]" });
 
 function withNlitePlugin(config: NliteUserConfig) {
-  const { nlite: nliteOptions, plugins = [], ...rest } = config;
+  const { vite, plugins: topLevelPlugins = [], ...nliteOptions } = config;
+  const { plugins: vitePlugins = [], ...viteConfig } = vite ?? {};
 
-  return mergeConfig(rest, {
+  return mergeConfig(viteConfig, {
     nlite: nliteOptions,
     customLogger,
     build: {
@@ -60,6 +66,6 @@ function withNlitePlugin(config: NliteUserConfig) {
         },
       },
     },
-    plugins: [...plugins, ...nlite(nliteOptions)],
+    plugins: [...topLevelPlugins, ...vitePlugins, ...nlite(nliteOptions)],
   });
 }

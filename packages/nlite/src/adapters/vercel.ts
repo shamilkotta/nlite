@@ -2,7 +2,7 @@ import { promises as fs } from "node:fs";
 import path from "node:path";
 import type { Plugin, PluginOption, ResolvedConfig } from "vite";
 
-import type { NliteUserConfig } from "../config.js";
+import type { NliteOptions } from "../types.js";
 import { resolveStaleTimes, STALE_TIME_HEADER } from "../utils/constants.js";
 
 export interface VercelAdapterOptions {
@@ -25,7 +25,7 @@ export function vercel(options: VercelAdapterOptions = {}): PluginOption[] {
     configResolved(resolvedConfig) {
       config = resolvedConfig;
       staticStaleTimeSeconds = resolveStaleTimes(
-        (resolvedConfig as unknown as NliteUserConfig).nlite?.staleTimes,
+        (resolvedConfig as unknown as { nlite?: NliteOptions }).nlite?.staleTimes,
       ).static;
     },
     async closeBundle() {

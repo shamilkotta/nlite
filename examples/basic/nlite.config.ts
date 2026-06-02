@@ -4,14 +4,14 @@ import { vercel } from "nlite/adapters";
 
 export default defineConfig({
   plugins: [vercel()],
-  nlite: {
-    staleTimes: {
-      static: 600,
-    },
+  staleTimes: {
+    static: 600,
   },
-  resolve: {
-    alias: {
-      "@": path.resolve(process.cwd()),
+  vite: {
+    resolve: {
+      alias: {
+        "@": path.resolve(process.cwd()),
+      },
     },
   },
 });
