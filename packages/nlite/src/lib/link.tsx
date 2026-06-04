@@ -3,7 +3,7 @@
 import { forwardRef } from "react";
 import type { MouseEvent, AnchorHTMLAttributes } from "react";
 
-import { useRouter } from "./navigation.js";
+import { useRouter } from "./navigation/client.js";
 
 export interface LinkProps extends Omit<AnchorHTMLAttributes<HTMLAnchorElement>, "href"> {
   href: string;

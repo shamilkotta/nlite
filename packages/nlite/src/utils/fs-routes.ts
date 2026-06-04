@@ -11,6 +11,7 @@ export interface RouteModuleFiles {
     layout?: string;
     loading?: string;
     error?: string;
+    notFound?: string;
   }[];
 }
 
@@ -76,14 +77,15 @@ async function collectTree(appRoot: string, pageDir: string) {
     const layout = await findConventionFile(currentDir, "layout");
     const loading = await findConventionFile(currentDir, "loading");
     const error = await findConventionFile(currentDir, "error");
-    // TODO: not found file
+    const notFound = await findConventionFile(currentDir, "not-found");
 
-    const currentSegement = {
+    const currentSegment = {
       layout,
       loading,
       error,
+      notFound,
     };
-    tree.unshift(currentSegement);
+    tree.unshift(currentSegment);
 
     if (currentDir === appRoot) {
       break;

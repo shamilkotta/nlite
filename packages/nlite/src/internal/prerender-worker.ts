@@ -1,6 +1,6 @@
 import { pathToFileURL } from "node:url";
 
-import { PRERENDER_ORIGIN } from "../utils/constants.js";
+import { NOT_FOUND_ROUTE_PATH, PRERENDER_ORIGIN } from "../utils/constants.js";
 
 type PrerenderWorkerInput = {
   entryPath: string;
@@ -20,6 +20,7 @@ export type PrerenderWorkerResult =
 
 export type PrerenderWorker = {
   renderRoute(input: PrerenderWorkerInput): Promise<PrerenderWorkerResult>;
+  renderNotFound(input: { entryPath: string }): Promise<PrerenderWorkerResult>;
 };
 
 declare const process: NodeJS.Process & {
@@ -42,6 +43,38 @@ export async function renderRoute({
   const request = new Request(new URL(routePath, PRERENDER_ORIGIN));
   const { rsc, stream, skip } = await entry.handlePrerender(request, {
     forcePrerender,
+    onDynamicUsage() {
+      process.send?.({ type: "dynamicUsage" });
+    },
+  });
+
+  if (skip || !stream || !rsc) {
+    return { skip: true };
+  }
+
+  const [streamBytes, rscBytes] = await Promise.all([readStream(stream), readStream(rsc)]);
+  return {
+    skip: false,
+    stream: [...streamBytes],
+    rsc: [...rscBytes],
+  };
+}
+
+export async function renderNotFound({
+  entryPath,
+}: {
+  entryPath: string;
+}): Promise<PrerenderWorkerResult> {
+  const entry: typeof import("../modules/entry.rsc.js") = await import(
+    /* @vite-ignore */ pathToFileURL(entryPath).href
+  );
+
+  if (!entry.handleGlobalNotFoundPrerender) {
+    return { skip: true };
+  }
+
+  const request = new Request(new URL(NOT_FOUND_ROUTE_PATH, PRERENDER_ORIGIN));
+  const { rsc, stream, skip } = await entry.handleGlobalNotFoundPrerender(request, {
     onDynamicUsage() {
       process.send?.({ type: "dynamicUsage" });
     },

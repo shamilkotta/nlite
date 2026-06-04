@@ -4,7 +4,7 @@ import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import type { ConfigEnv, Plugin, ResolvedConfig, UserConfig } from "vite";
 
-import { NOT_FOUND_HTML, resolveStaleTimes } from "../utils/constants.js";
+import { NOT_FOUND_HTML_FILE, NOT_FOUND_RSC_FILE, resolveStaleTimes } from "../utils/constants.js";
 import { writeAssetHeaders } from "../utils/headers.js";
 import type { NliteOptions, PrerenderPath } from "../types.js";
 import { normalizeHtmlFilePath, normalizeRoutePath, normalizeRscFilePath } from "../utils/path.js";
@@ -113,13 +113,17 @@ async function renderStatic(config: ResolvedConfig, options: NliteOptions) {
         writeBytesToFile(path.join(outDir, normalizeRscFilePath(routePath)), result.rsc),
       ]);
     }
+
+    // write global _not-found
+    const notFoundResult = await worker.renderNotFound({ entryPath });
+    if (!notFoundResult.skip) {
+      await Promise.all([
+        writeBytesToFile(path.join(outDir, NOT_FOUND_HTML_FILE), notFoundResult.stream),
+        writeBytesToFile(path.join(outDir, NOT_FOUND_RSC_FILE), notFoundResult.rsc),
+      ]);
+    }
   } finally {
     worker.end();
-  }
-
-  const notFoundHtml = path.join(outDir, "404.html");
-  if (!existsSync(notFoundHtml)) {
-    await writeFile(notFoundHtml, NOT_FOUND_HTML);
   }
 
   await writeAssetHeaders(outDir, resolveStaleTimes(options.staleTimes).static);
@@ -167,7 +171,7 @@ function parseRequestUrl(rawUrl: string | undefined) {
 function createPrerenderWorker(): WorkerProxy<PrerenderWorker> {
   const currentDir = path.dirname(fileURLToPath(import.meta.url));
   return createWorker<PrerenderWorker>(path.join(currentDir, "internal", "prerender-worker.mjs"), {
-    exposedMethods: ["renderRoute"],
+    exposedMethods: ["renderRoute", "renderNotFound"],
     onChildMessage(message, { resolve }) {
       if (message && (message as { type?: string }).type === "dynamicUsage") {
         resolve({ skip: true });

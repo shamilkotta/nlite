@@ -240,6 +240,13 @@ function buildTreeSegmentModule({
     source: segment.error,
     variableName: `error${routeIndex}_${segmentIndex}`,
   });
+  addTreeConventionImport({
+    entries,
+    imports,
+    exportName: "notFound",
+    source: segment.notFound,
+    variableName: `notFound${routeIndex}_${segmentIndex}`,
+  });
 
   return `{ ${entries.join(", ")} }`;
 }

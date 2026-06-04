@@ -3,9 +3,10 @@ import React, { createElement } from "react";
 import { renderToReadableStream } from "react-dom/server.edge";
 import { prerender } from "react-dom/static.edge";
 import type { RscPayload } from "../types.js";
+import { teeRscStream } from "../utils/stream.js";
 
 export async function renderHtml(rscStream: ReadableStream, _options: { ssg: boolean }) {
-  const [rscStream1, rscStream2] = rscStream.tee();
+  const [rscStream1, rscStream2] = await teeRscStream(rscStream);
   let payload: Promise<RscPayload>;
   function SsrRoot() {
     payload ??= createFromReadableStream<RscPayload>(rscStream1);

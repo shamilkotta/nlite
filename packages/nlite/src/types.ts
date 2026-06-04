@@ -42,6 +42,9 @@ export interface NliteRouteSegmentModule {
   error?: {
     default: ErrorBoundaryFallbackComponent;
   };
+  notFound?: {
+    default: ComponentType;
+  };
 }
 
 export interface NliteRouteRecord {

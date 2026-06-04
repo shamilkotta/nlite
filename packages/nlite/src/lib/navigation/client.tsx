@@ -2,7 +2,7 @@
 
 import { useSyncExternalStore } from "react";
 
-import type { NliteRouter, RouterNavigateOptions } from "../types.js";
+import type { NliteRouter, RouterNavigateOptions } from "../../types.js";
 
 interface NavigationSnapshot {
   pathname: string;

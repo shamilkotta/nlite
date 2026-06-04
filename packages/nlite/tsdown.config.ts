@@ -5,7 +5,7 @@ export default defineConfig((_opt): UserConfig[] => [
     entry: {
       index: "./src/index.ts",
       "lib/link": "./src/lib/link.tsx",
-      "lib/navigation": "./src/lib/navigation.tsx",
+      "lib/navigation": "./src/lib/navigation/index.ts",
       "lib/headers": "./src/lib/headers.ts",
       "lib/worker/*": "./src/lib/worker/*.ts",
       "lib/mdx": "./src/lib/mdx/index.ts",
@@ -15,6 +15,8 @@ export default defineConfig((_opt): UserConfig[] => [
       runtime: "./src/runtime.tsx",
       "api.runtime": "./src/api.runtime.ts",
       "lib/errorBoundary": "./src/lib/errorBoundary.tsx",
+      "lib/not-found-boundary": "./src/lib/not-found-boundary.tsx",
+      "lib/redirect-boundary": "./src/lib/redirect-boundary.tsx",
       "modules/*": "./src/modules/*.ts",
       adapters: "./src/adapters/index.ts",
     },
