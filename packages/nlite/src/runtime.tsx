@@ -1,6 +1,6 @@
 import React, { Suspense } from "react";
 
-import { ErrorBoundary } from "./lib/errorBoundary.js";
+import { ErrorBoundary } from "./lib/error-boundary.js";
 import { NotFoundBoundary } from "./lib/not-found-boundary.js";
 import { RedirectBoundary } from "./lib/redirect-boundary.js";
 import { trackSearchParams } from "./internal/request-context.js";

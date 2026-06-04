@@ -15,4 +15,4 @@ export {
   type ErrorBoundaryFallbackProps,
   type ErrorBoundaryFallbackComponent,
   type ErrorBoundaryResetDetails,
-} from "./lib/errorBoundary.js";
+} from "./lib/error-boundary.js";

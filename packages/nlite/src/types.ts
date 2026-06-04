@@ -1,6 +1,6 @@
 import type { ComponentType, ReactNode } from "react";
 
-import type { ErrorBoundaryFallbackComponent } from "./lib/errorBoundary.js";
+import type { ErrorBoundaryFallbackComponent } from "./lib/error-boundary.js";
 
 export type RenderingMode = "force-ssg" | "force-ssr";
 

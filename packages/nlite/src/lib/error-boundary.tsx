@@ -2,6 +2,8 @@
 
 import React, { Component, type ComponentType, type ErrorInfo, type ReactNode } from "react";
 
+import { isNliteRouterError } from "./navigation/errors.js";
+
 export interface ErrorBoundaryFallbackProps {
   error: Error;
   reset: () => void;
@@ -38,6 +40,10 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
   }
 
   static getDerivedStateFromError(error: Error): ErrorBoundaryState {
+    if (isNliteRouterError(error)) {
+      throw error;
+    }
+
     return { error };
   }
 

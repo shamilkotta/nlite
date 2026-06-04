@@ -14,7 +14,7 @@ export default defineConfig((_opt): UserConfig[] => [
       "internal/prerender-worker": "./src/internal/prerender-worker.ts",
       runtime: "./src/runtime.tsx",
       "api.runtime": "./src/api.runtime.ts",
-      "lib/errorBoundary": "./src/lib/errorBoundary.tsx",
+      "lib/error-boundary": "./src/lib/error-boundary.tsx",
       "lib/not-found-boundary": "./src/lib/not-found-boundary.tsx",
       "lib/redirect-boundary": "./src/lib/redirect-boundary.tsx",
       "modules/*": "./src/modules/*.ts",
