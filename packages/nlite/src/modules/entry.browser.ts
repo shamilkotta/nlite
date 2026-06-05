@@ -6,7 +6,7 @@ import {
   setNavigationRuntime,
   setNavigationSnapshot,
   type NavigationRuntime,
-} from "../lib/navigation.js";
+} from "../lib/navigation/client.js";
 import { fetchRouteTree, invalidateRouteCache, prefetchRoute } from "../lib/route-cache.js";
 import type { RouterNavigateOptions, RscPayload } from "../types.js";
 

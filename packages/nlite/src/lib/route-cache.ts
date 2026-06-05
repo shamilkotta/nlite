@@ -92,7 +92,7 @@ export function fetchRouteTree(
   }
 
   const pending = (async () => {
-    const response = await fetch(createRscHref(url));
+    const response = await fetch(createRscHref(url), { redirect: "manual" });
     const staleTimeMs = parseStaleTimeHeader(response) ?? getDefaultStaleTimeMs("dynamic");
     const payload = (await createFromFetch(Promise.resolve(response))) as RscPayload;
 

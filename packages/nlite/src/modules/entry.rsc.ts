@@ -19,11 +19,11 @@ import {
 } from "../lib/navigation/errors.js";
 import type { RscPayload } from "../types.js";
 import {
-  Document,
   NOT_FOUND_ROUTE_PATH,
   RESPONSE_STATUS_HEADER,
   STALE_TIME_HEADER,
 } from "../utils/constants.js";
+import { Document } from "../utils/elements.js";
 import { tryCatch } from "../utils/index.js";
 import { teeRscStream } from "../utils/stream.js";
 
@@ -37,7 +37,7 @@ function toRscPathname(pathname: string) {
   return pathname.endsWith(".rsc") ? pathname.slice(0, -4) || "/" : pathname;
 }
 
-export async function handler(request: Request, env?: WorkerEnv) {
+export async function handler(request: Request, _env?: WorkerEnv) {
   const url = new URL(request.url);
   const pathname = url.pathname;
 
@@ -51,7 +51,7 @@ export async function handler(request: Request, env?: WorkerEnv) {
 
   const renderRequest = parseRenderRequest(request, pathname);
 
-  if (pathname === NOT_FOUND_ROUTE_PATH) {
+  if (renderRequest.pathname === NOT_FOUND_ROUTE_PATH) {
     const stream = runWithRequestContext(
       request,
       () => {
@@ -72,17 +72,20 @@ export async function handler(request: Request, env?: WorkerEnv) {
 
     return finalizeRenderResponse(stream, {
       renderRequest,
+      status: 404,
     });
   }
 
   const match = matchRoute(routes, renderRequest.pathname);
 
   if (!match) {
-    // TODO: need to set status code to 404
-    if (env?.ASSETS) {
-      return env.ASSETS.fetch(new Request(NOT_FOUND_ROUTE_PATH, request));
-    }
-    return fetch(new Request(NOT_FOUND_ROUTE_PATH, request));
+    const response = await fetch(
+      new Request(NOT_FOUND_ROUTE_PATH + (renderRequest.isRsc ? ".rsc" : ""), request),
+    );
+    return new Response(response.body, {
+      status: response.status > 500 ? response.status : 404,
+      headers: response.headers,
+    });
   }
 
   try {
@@ -106,6 +109,7 @@ export async function handler(request: Request, env?: WorkerEnv) {
 
     return finalizeRenderResponse(stream, {
       renderRequest,
+      status: 200,
     });
   } catch (error) {
     if (error && isNotFoundError(error)) {
@@ -133,10 +137,21 @@ export async function handler(request: Request, env?: WorkerEnv) {
 
       return finalizeRenderResponse(stream, {
         renderRequest,
+        status: renderRequest.isRsc ? 200 : 404,
+        responseStatus: 404,
       });
     }
 
     if (error && isRedirectError(error)) {
+      // if (renderRequest.isRsc) {
+      //   // TODO: need to handle redirect rsc response
+      //   return finalizeRenderResponse(stream, {
+      //     renderRequest,
+      //     status: 200,
+      //     responseStatus: getRedirectStatusCodeFromError(error),
+      //   });
+      // }
+
       return Response.redirect(
         new URL(getURLFromRedirectError(error), request.url).toString(),
         getRedirectStatusCodeFromError(error),
@@ -147,24 +162,24 @@ export async function handler(request: Request, env?: WorkerEnv) {
   }
 }
 
-// TODO: response status
-// controlled not found: isRsc = 200, isHtml = 404
-// uncontrolled not found: isRsc = 404, isHtml = 404
 async function finalizeRenderResponse(
   rscStream: ReadableStream,
   options: {
     renderRequest: ReturnType<typeof parseRenderRequest>;
+    status?: number;
+    responseStatus?: number;
   },
 ) {
-  if (options.renderRequest.isRsc) {
-    const status = 200;
+  const httpStatus = options.status ?? 200;
+  const responseStatus = options.responseStatus ?? httpStatus;
 
+  if (options.renderRequest.isRsc) {
     return new Response(rscStream, {
-      status,
+      status: httpStatus,
       headers: {
         "content-type": "text/x-component;charset=utf-8",
         [STALE_TIME_HEADER]: String(__NLITE_STALE_TIMES__.dynamic),
-        [RESPONSE_STATUS_HEADER]: String(status),
+        [RESPONSE_STATUS_HEADER]: String(responseStatus),
       },
     });
   }
@@ -173,12 +188,12 @@ async function finalizeRenderResponse(
     "ssr",
     "index",
   );
-  const { stream: htmlStream, status } = await ssrEntry.renderHtml(rscStream, {
+  const { stream: htmlStream, status: renderStatus } = await ssrEntry.renderHtml(rscStream, {
     ssg: false,
   });
 
   return new Response(htmlStream, {
-    status: status ?? 200,
+    status: renderStatus ?? httpStatus,
     headers: {
       "content-type": "text/html;charset=utf-8",
       [STALE_TIME_HEADER]: String(__NLITE_STALE_TIMES__.dynamic),
