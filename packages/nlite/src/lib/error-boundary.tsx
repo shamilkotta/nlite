@@ -130,7 +130,7 @@ export function GlobalErrorElement({ reset }: ErrorBoundaryFallbackProps): React
       React.createElement(
         "p",
         { className: `${STATUS_PAGE_CLASS}__description` },
-        "An unexpected error occurred. Try reloading the page or go back.",
+        "An unexpected error occurred. Try again or reload the page.",
       ),
       React.createElement(
         "div",
@@ -148,10 +148,10 @@ export function GlobalErrorElement({ reset }: ErrorBoundaryFallbackProps): React
           "button",
           {
             type: "button",
-            onClick: () => window.history.back(),
+            onClick: () => window.location.reload(),
             className: `${STATUS_PAGE_CLASS}__btn ${STATUS_PAGE_CLASS}__btn--secondary`,
           },
-          "Go back",
+          "Reload",
         ),
       ),
     ),

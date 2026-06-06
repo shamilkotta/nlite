@@ -90,6 +90,10 @@ export async function handler(request: Request, _env?: WorkerEnv) {
   const match = matchRoute(routes, renderRequest.pathname);
 
   if (!match) {
+    if (!renderRequest.isRsc && !isDocumentRenderRequest(request, pathname)) {
+      return new Response(null, { status: 404 });
+    }
+
     const response = await fetch(
       new Request(
         new URL(NOT_FOUND_ROUTE_PATH + (renderRequest.isRsc ? ".rsc" : ""), request.url),
@@ -304,6 +308,25 @@ export async function handleGlobalNotFoundPrerender(
     return { stream: null, rsc: null, skip: true };
   }
   return finalizePrerenderResult(prerenderResult.prelude);
+}
+
+function isDocumentRenderRequest(request: Request, pathname: string) {
+  if (request.method !== "GET" && request.method !== "HEAD") {
+    return false;
+  }
+
+  const accept = request.headers.get("accept") ?? "";
+  const acceptsHtml = !accept || accept.includes("text/html") || accept.includes("*/*");
+  if (!acceptsHtml) {
+    return false;
+  }
+
+  const lastSegment = pathname.split("/").pop();
+  if (lastSegment?.includes(".")) {
+    return false;
+  }
+
+  return true;
 }
 
 function parseRenderRequest(request: Request, pathname = new URL(request.url).pathname) {
