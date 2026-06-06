@@ -7,16 +7,15 @@ import {
   collectStaticPaths,
   createGlobalNotFoundElement,
   createRouteElement,
-  createRouteNotFoundElement,
   matchRoute,
 } from "../runtime.js";
-import { runWithRequestContext, withTrackedFetch } from "../internal/request-context.js";
 import {
-  getRedirectStatusCodeFromError,
-  getURLFromRedirectError,
-  isNotFoundError,
-  isRedirectError,
-} from "../lib/navigation/errors.js";
+  DynamicPrerenderUsageError,
+  isContextError,
+  runWithRequestContext,
+  withTrackedFetch,
+} from "../internal/request-context.js";
+import { isNliteRouterError } from "../lib/navigation/errors.js";
 import type { RscPayload } from "../types.js";
 import {
   NOT_FOUND_ROUTE_PATH,
@@ -35,6 +34,18 @@ type WorkerEnv = {
 
 function toRscPathname(pathname: string) {
   return pathname.endsWith(".rsc") ? pathname.slice(0, -4) || "/" : pathname;
+}
+
+function onRscError(error: unknown) {
+  if (isNliteRouterError(error)) {
+    return error.digest;
+  }
+
+  if (isContextError(error)) {
+    return;
+  }
+
+  throw error;
 }
 
 export async function handler(request: Request, _env?: WorkerEnv) {
@@ -80,86 +91,37 @@ export async function handler(request: Request, _env?: WorkerEnv) {
 
   if (!match) {
     const response = await fetch(
-      new Request(NOT_FOUND_ROUTE_PATH + (renderRequest.isRsc ? ".rsc" : ""), request),
+      new Request(
+        new URL(NOT_FOUND_ROUTE_PATH + (renderRequest.isRsc ? ".rsc" : ""), request.url),
+        request,
+      ),
     );
     return new Response(response.body, {
-      status: response.status > 500 ? response.status : 404,
+      status: response.status >= 500 ? response.status : 404,
       headers: response.headers,
     });
   }
 
-  try {
-    const stream = runWithRequestContext(
-      request,
-      () => {
-        const app = createRouteElement(match.route, match.params, url.searchParams);
-        const documentNode = React.createElement(Document, {
-          children: app,
-          pathname,
-        });
-        const rscPayload = { root: documentNode };
-        return renderToReadableStream<RscPayload>(rscPayload, {
-          onError: (error: unknown) => {
-            throw error;
-          },
-        });
-      },
-      { searchParams: url.searchParams },
-    );
-
-    return finalizeRenderResponse(stream, {
-      renderRequest,
-      status: 200,
-    });
-  } catch (error) {
-    if (error && isNotFoundError(error)) {
-      const stream = runWithRequestContext(
-        request,
-        () => {
-          const app = createRouteNotFoundElement(
-            match.route,
-            match.params,
-            renderRequest.url.searchParams,
-          );
-          const documentNode = React.createElement(Document, {
-            children: app,
-            pathname,
-          });
-          const rscPayload = { root: documentNode };
-          return renderToReadableStream<RscPayload>(rscPayload, {
-            onError: (error: unknown) => {
-              throw error;
-            },
-          });
-        },
-        { searchParams: url.searchParams },
-      );
-
-      return finalizeRenderResponse(stream, {
-        renderRequest,
-        status: renderRequest.isRsc ? 200 : 404,
-        responseStatus: 404,
+  const stream = runWithRequestContext(
+    request,
+    () => {
+      const app = createRouteElement(match.route, match.params, url.searchParams);
+      const documentNode = React.createElement(Document, {
+        children: app,
+        pathname,
       });
-    }
+      const rscPayload = { root: documentNode };
+      return renderToReadableStream<RscPayload>(rscPayload, {
+        onError: onRscError,
+      });
+    },
+    { searchParams: url.searchParams },
+  );
 
-    if (error && isRedirectError(error)) {
-      // if (renderRequest.isRsc) {
-      //   // TODO: need to handle redirect rsc response
-      //   return finalizeRenderResponse(stream, {
-      //     renderRequest,
-      //     status: 200,
-      //     responseStatus: getRedirectStatusCodeFromError(error),
-      //   });
-      // }
-
-      return Response.redirect(
-        new URL(getURLFromRedirectError(error), request.url).toString(),
-        getRedirectStatusCodeFromError(error),
-      );
-    }
-
-    throw error;
-  }
+  return finalizeRenderResponse(stream, {
+    renderRequest,
+    status: 200,
+  });
 }
 
 async function finalizeRenderResponse(
@@ -207,13 +169,6 @@ if (import.meta.hot) {
   import.meta.hot.accept();
 }
 
-class DynamicPrerenderUsageError extends Error {
-  constructor() {
-    super("Route used request-bound data during prerender");
-    this.name = "DynamicPrerenderUsageError";
-  }
-}
-
 export async function collectPrerenderPaths() {
   return collectStaticPaths(routes);
 }
@@ -233,16 +188,10 @@ export async function handlePrerender(
   }
 
   const [initialResult, initialError] = await tryCatch(
-    prerenderRoute(match, renderRequest, request, options),
+    prerenderRoute(match, renderRequest, request, {
+      ...options,
+    }),
   );
-
-  if (initialError && isNotFoundError(initialError)) {
-    return prerenderNotFoundRoute(match, renderRequest, request, options);
-  }
-
-  if (initialError && isRedirectError(initialError)) {
-    return { stream: null, rsc: null, skip: true };
-  }
 
   if (initialError) {
     throw initialError;
@@ -263,109 +212,32 @@ async function prerenderRoute(
   const controller = new AbortController();
   const dynamicUsage = new DynamicPrerenderUsageError();
 
-  const [prerenderResult, error] = await tryCatch(
-    runWithRequestContext(
-      request,
-      () =>
-        withTrackedFetch(() => {
-          const app = createRouteElement(match.route, match.params, renderRequest.url.searchParams);
-          const documentNode = React.createElement(Document, {
-            children: app,
-            pathname: renderRequest.pathname,
-          });
-          const rscPayload = { root: documentNode };
+  const prerenderResult = await runWithRequestContext(
+    request,
+    () =>
+      withTrackedFetch(() => {
+        const app = createRouteElement(match.route, match.params, renderRequest.url.searchParams);
+        const documentNode = React.createElement(Document, {
+          children: app,
+          pathname: renderRequest.pathname,
+        });
+        const rscPayload = { root: documentNode };
 
-          return prerender<RscPayload>(rscPayload, createClientManifest(), {
-            signal: controller.signal,
-            onError: (error) => {
-              if (error instanceof DynamicPrerenderUsageError) {
-                return;
-              }
-
-              throw error;
-            },
-          });
-        }),
-      {
-        searchParams: renderRequest.url.searchParams,
-        onDynamicUsage() {
-          if (!options.forcePrerender) {
-            options.onDynamicUsage?.();
-            controller.abort(dynamicUsage);
-          }
-        },
+        return prerender<RscPayload>(rscPayload, createClientManifest(), {
+          signal: controller.signal,
+          onError: onRscError,
+        });
+      }),
+    {
+      searchParams: renderRequest.url.searchParams,
+      onDynamicUsage() {
+        if (!options.forcePrerender) {
+          options.onDynamicUsage?.();
+          controller.abort(dynamicUsage);
+        }
       },
-    ),
+    },
   );
-
-  if (error) {
-    throw error;
-  }
-
-  if (controller.signal.aborted && controller.signal.reason instanceof DynamicPrerenderUsageError) {
-    return { stream: null, rsc: null, skip: true };
-  }
-
-  if (!prerenderResult?.prelude) {
-    return { stream: null, rsc: null, skip: true };
-  }
-
-  return finalizePrerenderResult(prerenderResult.prelude);
-}
-
-async function prerenderNotFoundRoute(
-  match: NonNullable<ReturnType<typeof matchRoute>>,
-  renderRequest: ReturnType<typeof parseRenderRequest>,
-  request: Request,
-  options: {
-    forcePrerender?: boolean;
-    onDynamicUsage?: () => void;
-  },
-) {
-  const controller = new AbortController();
-  const dynamicUsage = new DynamicPrerenderUsageError();
-  const [prerenderResult, error] = await tryCatch(
-    runWithRequestContext(
-      request,
-      () =>
-        withTrackedFetch(() => {
-          const app = createRouteNotFoundElement(
-            match.route,
-            match.params,
-            renderRequest.url.searchParams,
-          );
-          const documentNode = React.createElement(Document, {
-            children: app,
-            pathname: renderRequest.pathname,
-          });
-          const rscPayload = { root: documentNode };
-
-          return prerender<RscPayload>(rscPayload, createClientManifest(), {
-            signal: controller.signal,
-            onError: (error) => {
-              if (error instanceof DynamicPrerenderUsageError) {
-                return;
-              }
-
-              throw error;
-            },
-          });
-        }),
-      {
-        searchParams: renderRequest.url.searchParams,
-        onDynamicUsage() {
-          if (!options.forcePrerender) {
-            options.onDynamicUsage?.();
-            controller.abort(dynamicUsage);
-          }
-        },
-      },
-    ),
-  );
-
-  if (error) {
-    throw error;
-  }
 
   if (controller.signal.aborted && controller.signal.reason instanceof DynamicPrerenderUsageError) {
     return { stream: null, rsc: null, skip: true };
@@ -398,41 +270,35 @@ export async function handleGlobalNotFoundPrerender(
   const controller = new AbortController();
   const dynamicUsage = new DynamicPrerenderUsageError();
 
-  const [prerenderResult, error] = await tryCatch(
-    runWithRequestContext(
-      request,
-      () =>
-        withTrackedFetch(() => {
-          const app = createGlobalNotFoundElement(routes, renderRequest.url.searchParams);
-          const documentNode = React.createElement(Document, {
-            children: app,
-            pathname: NOT_FOUND_ROUTE_PATH,
-          });
-          const rscPayload = { root: documentNode };
+  const prerenderResult = await runWithRequestContext(
+    request,
+    () =>
+      withTrackedFetch(() => {
+        const app = createGlobalNotFoundElement(routes, renderRequest.url.searchParams);
+        const documentNode = React.createElement(Document, {
+          children: app,
+          pathname: NOT_FOUND_ROUTE_PATH,
+        });
+        const rscPayload = { root: documentNode };
 
-          return prerender<RscPayload>(rscPayload, createClientManifest(), {
-            onError(error) {
-              if (error instanceof DynamicPrerenderUsageError) {
-                return;
-              }
+        return prerender<RscPayload>(rscPayload, createClientManifest(), {
+          onError: (error: unknown) => {
+            if (error instanceof DynamicPrerenderUsageError) {
+              return;
+            }
 
-              throw error;
-            },
-          });
-        }),
-      {
-        searchParams: renderRequest.url.searchParams,
-        onDynamicUsage() {
-          controller.abort(dynamicUsage);
-          options.onDynamicUsage?.();
-        },
+            throw error;
+          },
+        });
+      }),
+    {
+      searchParams: renderRequest.url.searchParams,
+      onDynamicUsage() {
+        controller.abort(dynamicUsage);
+        options.onDynamicUsage?.();
       },
-    ),
+    },
   );
-
-  if (error) {
-    throw error;
-  }
 
   if (!prerenderResult?.prelude) {
     return { stream: null, rsc: null, skip: true };

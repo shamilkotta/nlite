@@ -8,6 +8,20 @@ interface RequestContext {
   onDynamicUsage?: (reason: DynamicReason) => void;
 }
 
+export class DynamicPrerenderUsageError extends Error {
+  constructor() {
+    super("Route used request-bound data during prerender");
+    this.name = "DynamicPrerenderUsageError";
+  }
+}
+
+export function isContextError(error: unknown): boolean {
+  return (
+    error instanceof DynamicPrerenderUsageError ||
+    (error instanceof Error && error.name === "DynamicPrerenderUsageError")
+  );
+}
+
 const requestContext = new AsyncLocalStorage<RequestContext>();
 
 export function runWithRequestContext<T>(

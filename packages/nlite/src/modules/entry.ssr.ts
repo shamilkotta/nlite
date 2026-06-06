@@ -4,6 +4,11 @@ import { renderToReadableStream } from "react-dom/server.edge";
 import { prerender } from "react-dom/static.edge";
 import type { RscPayload } from "../types.js";
 import { teeRscStream } from "../utils/stream.js";
+import {
+  getURLFromRedirectError,
+  isNotFoundError,
+  isRedirectError,
+} from "../lib/navigation/errors.js";
 
 export async function renderHtml(rscStream: ReadableStream, _options: { ssg: boolean }) {
   const [rscStream1, rscStream2] = await teeRscStream(rscStream);
@@ -17,41 +22,93 @@ export async function renderHtml(rscStream: ReadableStream, _options: { ssg: boo
   let htmlStream: ReadableStream<Uint8Array>;
   let status: number | undefined;
   if (_options?.ssg) {
-    // for static site generation, let errors throw to fail the build
-    const prerenderResult = await prerender(createElement(SsrRoot), {
-      bootstrapScriptContent,
-    });
-    htmlStream = prerenderResult.prelude;
+    try {
+      const prerenderResult = await prerender(createElement(SsrRoot), {
+        bootstrapScriptContent,
+        onError: reportRenderError,
+      });
+      htmlStream = prerenderResult.prelude;
+    } catch (error) {
+      if (isRedirectError(error)) {
+        htmlStream = await prerenderNavigationShell(bootstrapScriptContent, [
+          createElement("meta", {
+            key: "redirect",
+            httpEquiv: "refresh",
+            content: `0;url=${getURLFromRedirectError(error)}`,
+          }),
+        ]);
+      } else if (isNotFoundError(error)) {
+        htmlStream = await prerenderNavigationShell(bootstrapScriptContent, [
+          createElement("meta", { key: "robots", name: "robots", content: "noindex" }),
+        ]);
+      } else {
+        throw error;
+      }
+    }
   } else {
     try {
       htmlStream = await renderToReadableStream(createElement(SsrRoot), {
+        onError: reportRenderError,
         bootstrapScriptContent,
       });
     } catch (error) {
-      console.error("[nlite] SSR render failed", error);
-      // fallback to render an empty shell and run pure CSR on browser,
-      // which can replay server component error and trigger error boundary.
-      status = 500;
-      htmlStream = await renderToReadableStream(
-        createElement(
-          "html",
-          null,
+      if (isRedirectError(error)) {
+        htmlStream = await renderNavigationShell(bootstrapScriptContent, [
+          createElement("meta", {
+            key: "redirect",
+            httpEquiv: "refresh",
+            content: `0;url=${getURLFromRedirectError(error)}`,
+          }),
+        ]);
+      } else if (isNotFoundError(error)) {
+        htmlStream = await renderNavigationShell(bootstrapScriptContent, [
+          createElement("meta", { key: "robots", name: "robots", content: "noindex" }),
+        ]);
+      } else {
+        console.error("[nlite] SSR render failed", error);
+        status = 500;
+        htmlStream = await renderToReadableStream(
           createElement(
-            "body",
+            "html",
             null,
-            createElement("noscript", null, "Internal Server Error: SSR failed"),
+            createElement(
+              "body",
+              null,
+              createElement("noscript", null, "Internal Server Error: SSR failed"),
+            ),
           ),
-        ),
-        {
-          bootstrapScriptContent: `self.__NO_HYDRATE=1;` + bootstrapScriptContent,
-        },
-      );
+          {
+            bootstrapScriptContent: `self.__NO_HYDRATE=1;` + bootstrapScriptContent,
+          },
+        );
+      }
     }
   }
 
   let responseStream: ReadableStream<Uint8Array> = htmlStream;
   responseStream = responseStream.pipeThrough(injectRSCPayload(rscStream2));
   return { stream: responseStream, status };
+}
+
+function reportRenderError(error: unknown) {
+  if (!isRedirectError(error) && !isNotFoundError(error)) {
+    console.error(error);
+  }
+}
+
+function renderNavigationShell(bootstrapScriptContent: string, metadata: React.ReactNode) {
+  return renderToReadableStream(
+    createElement("html", null, createElement("head", null, metadata), createElement("body")),
+    { bootstrapScriptContent },
+  );
+}
+
+async function prerenderNavigationShell(bootstrapScriptContent: string, metadata: React.ReactNode) {
+  const result = await prerender(
+    createElement("html", null, createElement("head", null, metadata), createElement("body")),
+    { bootstrapScriptContent },
+  );
+  return result.prelude;
 }
 
 if (import.meta.hot) {

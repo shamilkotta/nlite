@@ -42,7 +42,7 @@ function HandleRedirect({
     });
   }, [redirect, redirectType, reset, router]);
 
-  return <meta httpEquiv="refresh" content={`0;url=${redirect}`} />;
+  return null;
 }
 
 class RedirectErrorBoundary extends Component<RedirectBoundaryProps, RedirectErrorBoundaryState> {
