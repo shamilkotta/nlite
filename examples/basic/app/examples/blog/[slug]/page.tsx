@@ -1,5 +1,6 @@
 import Link from "nlite/link";
 import { getCollection, getEntry } from "nlite/mdx";
+import { notFound } from "nlite/navigation";
 
 type BlogPostData = {
   title: string;
@@ -23,14 +24,7 @@ export default async function ContentBlogPostPage({
   const post = await getEntry<BlogPostData>("blog", slug);
 
   if (!post || post.data.draft) {
-    return (
-      <main className="main">
-        <h1>Post not found</h1>
-        <p>
-          <Link href="/examples/blog">← Back to blog index</Link>
-        </p>
-      </main>
-    );
+    notFound();
   }
 
   const PostContent = post.Content;

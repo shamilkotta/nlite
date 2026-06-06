@@ -126,7 +126,7 @@ async function renderStatic(config: ResolvedConfig, options: NliteOptions) {
     worker.end();
   }
 
-  await writeAssetHeaders(outDir, resolveStaleTimes(options.staleTimes).static);
+  await writeAssetHeaders(outDir, resolveStaleTimes(options.staleTimes));
 }
 
 function normalizePaths(paths: PrerenderPath[]) {
