@@ -94,15 +94,22 @@ export async function handler(request: Request, _env?: WorkerEnv) {
       return new Response(null, { status: 404 });
     }
 
-    const response = await fetch(
-      new Request(
-        new URL(NOT_FOUND_ROUTE_PATH + (renderRequest.isRsc ? ".rsc" : ""), request.url),
-        request,
-      ),
+    const notFoundUrl = new URL(
+      NOT_FOUND_ROUTE_PATH + (renderRequest.isRsc ? ".rsc" : ""),
+      request.url,
     );
+    const response = await fetch(new Request(notFoundUrl, request));
+    const headers = new Headers({
+      "content-type": renderRequest.isRsc
+        ? "text/x-component;charset=utf-8"
+        : "text/html;charset=utf-8",
+      [STALE_TIME_HEADER]:
+        response.headers.get(STALE_TIME_HEADER) ?? String(__NLITE_STALE_TIMES__.dynamic),
+    });
+
     return new Response(response.body, {
       status: response.status >= 500 ? response.status : 404,
-      headers: response.headers,
+      headers,
     });
   }
 
