@@ -3,19 +3,20 @@ import path from "node:path";
 import type { Plugin, PluginOption, ResolvedConfig } from "vite";
 
 import type { NliteOptions } from "../types.js";
-import { resolveStaleTimes, STALE_TIME_HEADER } from "../utils/constants.js";
-import { toPosix } from "../utils/fs-routes.js";
+import { NOT_FOUND_RSC_FILE, resolveStaleTimes, STALE_TIME_HEADER } from "../utils/constants.js";
 import { tryCatch } from "../utils/index.js";
 
-export interface VercelAdapterOptions {
-  runtime?: "edge";
-}
+export interface VercelAdapterOptions {}
 
 const FUNCTION_NAME = "__nlite";
+const SERVER_BUNDLE_DIR = "server";
+const VERCEL_OUTPUT_DIR = ".vercel/output";
+const STATIC_RSC_ROUTE = "/(.*\\.rsc)";
+const CLEAN_URL_ROUTE = "/((?:[^/]+/)*[^/.]+)$";
 
-export function vercel(options: VercelAdapterOptions = {}): PluginOption[] {
+export function vercel(_options: VercelAdapterOptions = {}): PluginOption[] {
   let config: ResolvedConfig;
-  let staticStaleTimeSeconds: number;
+  let staleTimes: { static: number; dynamic: number };
 
   const plugin: Plugin = {
     name: "nlite:vercel",
@@ -26,53 +27,63 @@ export function vercel(options: VercelAdapterOptions = {}): PluginOption[] {
     },
     configResolved(resolvedConfig) {
       config = resolvedConfig;
-      staticStaleTimeSeconds = resolveStaleTimes(
+      staleTimes = resolveStaleTimes(
         (resolvedConfig as unknown as { nlite?: NliteOptions }).nlite?.staleTimes,
-      ).static;
+      );
     },
     async closeBundle() {
       const root = config.root;
-      const outputDir = path.resolve(root, config.build.outDir);
       const clientOutDir = path.resolve(root, config.environments.client.build.outDir);
       const serverOutDir = path.resolve(root, config.environments.rsc.build.outDir);
 
-      const staticDir = path.join(outputDir, "static");
-      await moveIfExists(clientOutDir, staticDir);
-      const overrides = await collectStaticOverrides(staticDir, {
-        [STALE_TIME_HEADER]: String(staticStaleTimeSeconds),
-      });
+      if (!(await exists(serverOutDir))) {
+        config.logger.warn("[nlite] Vercel adapter skipped: server bundle was not found.");
+        return;
+      }
 
-      const functionDir = path.join(outputDir, "functions", `${FUNCTION_NAME}.func`);
-      await moveIfExists(serverOutDir, functionDir);
-      await writeFunctionEntrypoint(functionDir);
-      await writeFunctionConfig(functionDir, options.runtime ?? "edge");
-      await writeVercelConfig(outputDir, overrides);
+      const outputDir = path.join(root, VERCEL_OUTPUT_DIR);
+      await fs.rm(outputDir, { recursive: true, force: true });
 
-      config.logger.info(`[nlite] Vercel Build ready in ${path.relative(root, outputDir)}`);
+      await copyDir(clientOutDir, path.join(outputDir, "static"));
+      const runtime = "nodejs22.x";
+      await writeVercelFunction(root, serverOutDir, runtime);
+      await writeVercelConfig(root, staleTimes);
+
+      config.logger.info(`[nlite] Vercel build ready in ${path.relative(root, outputDir)}.`);
     },
   };
 
   return [plugin];
 }
 
-async function moveIfExists(source: string, destination: string) {
-  if (!(await exists(source))) {
-    return;
-  }
+async function writeVercelFunction(root: string, serverOutDir: string, runtime: string) {
+  const functionDir = path.join(root, `${VERCEL_OUTPUT_DIR}/functions`, `${FUNCTION_NAME}.func`);
 
-  await fs.rm(destination, { recursive: true, force: true });
-  await fs.mkdir(path.dirname(destination), { recursive: true });
-  await fs.rename(source, destination);
+  await fs.mkdir(functionDir, { recursive: true });
+  await copyDir(serverOutDir, path.join(functionDir, SERVER_BUNDLE_DIR));
+
+  await Promise.all([
+    writeFunctionPackageJson(functionDir),
+    writeFunctionConfig(functionDir, runtime),
+  ]);
 }
 
-async function writeFunctionConfig(functionDir: string, runtime: "edge") {
-  await fs.mkdir(functionDir, { recursive: true });
+async function writeFunctionPackageJson(functionDir: string) {
+  await fs.writeFile(
+    path.join(functionDir, "package.json"),
+    `${JSON.stringify({ type: "module" }, null, 2)}\n`,
+  );
+}
+
+async function writeFunctionConfig(functionDir: string, runtime: string) {
   await fs.writeFile(
     path.join(functionDir, ".vc-config.json"),
     `${JSON.stringify(
       {
         runtime,
-        entrypoint: "vercel-entry.js",
+        handler: `${SERVER_BUNDLE_DIR}/index.js`,
+        launcherType: "Nodejs",
+        supportsResponseStreaming: true,
       },
       null,
       2,
@@ -80,27 +91,38 @@ async function writeFunctionConfig(functionDir: string, runtime: "edge") {
   );
 }
 
-async function writeFunctionEntrypoint(functionDir: string) {
-  await fs.mkdir(functionDir, { recursive: true });
-  await fs.writeFile(
-    path.join(functionDir, "vercel-entry.js"),
-    `import { handler } from "./index.js";
+async function writeVercelConfig(root: string, staleTimes: { static: number; dynamic: number }) {
+  const outputDir = path.join(root, VERCEL_OUTPUT_DIR);
 
-export default function nliteVercelHandler(request) {
-  return handler(request);
-}
-`,
-  );
-}
-
-async function writeVercelConfig(outputDir: string, overrides: VercelOverrides) {
+  await fs.mkdir(outputDir, { recursive: true });
   await fs.writeFile(
     path.join(outputDir, "config.json"),
     `${JSON.stringify(
       {
         version: 3,
-        routes: [{ handle: "filesystem" }, { src: "/(.*)", dest: `/${FUNCTION_NAME}` }],
-        overrides,
+        routes: [
+          {
+            src: STATIC_RSC_ROUTE,
+            headers: { [STALE_TIME_HEADER]: String(staleTimes.static) },
+            continue: true,
+          },
+          {
+            src: `/${NOT_FOUND_RSC_FILE}`,
+            headers: { [STALE_TIME_HEADER]: String(staleTimes.dynamic) },
+            continue: true,
+          },
+          {
+            src: CLEAN_URL_ROUTE,
+            dest: "/$1.html",
+            check: true,
+          },
+          { handle: "filesystem" },
+          {
+            src: "/(.*)",
+            dest: `/${FUNCTION_NAME}`,
+            headers: { [STALE_TIME_HEADER]: String(staleTimes.dynamic) },
+          },
+        ],
       },
       null,
       2,
@@ -108,57 +130,13 @@ async function writeVercelConfig(outputDir: string, overrides: VercelOverrides) 
   );
 }
 
-type VercelOverrides = Record<string, { path?: string; headers?: Record<string, string> }>;
-
-async function collectStaticOverrides(
-  staticDir: string,
-  rscHeaders: Record<string, string>,
-): Promise<VercelOverrides> {
-  if (!(await exists(staticDir))) {
-    return {};
+async function copyDir(source: string, destination: string) {
+  if (!(await exists(source))) {
+    return;
   }
 
-  const overrides: VercelOverrides = {};
-
-  for (const file of await collectStaticFiles(staticDir)) {
-    const relative = toPosix(path.relative(staticDir, file));
-
-    if (relative.endsWith(".rsc")) {
-      overrides[relative] = {
-        headers: rscHeaders,
-      };
-      continue;
-    }
-
-    if (relative.endsWith(".html") && !["404.html", "index.html"].includes(relative)) {
-      overrides[relative] = {
-        path: relative.slice(0, -".html".length),
-      };
-    }
-  }
-
-  return overrides;
-}
-
-async function collectStaticFiles(directory: string): Promise<string[]> {
-  const entries = await fs.readdir(directory, { withFileTypes: true });
-  const files = await Promise.all(
-    entries.map(async (entry) => {
-      const entryPath = path.join(directory, entry.name);
-
-      if (entry.isDirectory()) {
-        return collectStaticFiles(entryPath);
-      }
-
-      if (entry.isFile()) {
-        return [entryPath];
-      }
-
-      return [];
-    }),
-  );
-
-  return files.flat();
+  await fs.rm(destination, { recursive: true, force: true });
+  await fs.cp(source, destination, { recursive: true, force: true });
 }
 
 async function exists(filePath: string) {
