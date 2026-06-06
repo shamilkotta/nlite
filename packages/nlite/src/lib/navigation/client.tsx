@@ -10,11 +10,15 @@ interface NavigationSnapshot {
   searchParams: URLSearchParams;
 }
 
-const listeners = new Set<() => void>();
+interface NavigationStore {
+  listeners: Set<() => void>;
+  snapshot: NavigationSnapshot;
+}
 
-let navigationSnapshot = readSnapshot();
 const NAVIGATION_RUNTIME_KEY = "__NLITE_NAVIGATION_RUNTIME__";
+const NAVIGATION_STORE_KEY = "__NLITE_NAVIGATION_STORE__";
 let navigationRuntime: NavigationRuntime | undefined;
+let navigationStore: NavigationStore | undefined;
 
 function getNavigationRuntime() {
   if (navigationRuntime) {
@@ -74,30 +78,57 @@ export function useSearchParams() {
 }
 
 export function setNavigationSnapshot(url: URL) {
-  navigationSnapshot = snapshotFromUrl(url);
-  emit();
+  const store = getNavigationStore();
+  store.snapshot = snapshotFromUrl(url);
+  emit(store);
 }
 
 function useNavigationSnapshot() {
   return useSyncExternalStore(
     subscribe,
-    () => navigationSnapshot,
-    () => navigationSnapshot,
+    () => getNavigationStore().snapshot,
+    () => getNavigationStore().snapshot,
   );
 }
 
 function subscribe(listener: () => void) {
-  listeners.add(listener);
+  const store = getNavigationStore();
+  store.listeners.add(listener);
 
   return () => {
-    listeners.delete(listener);
+    store.listeners.delete(listener);
   };
 }
 
-function emit() {
-  for (const listener of listeners) {
+function emit(store: NavigationStore) {
+  for (const listener of store.listeners) {
     listener();
   }
+}
+
+function getNavigationStore() {
+  if (navigationStore) {
+    return navigationStore;
+  }
+
+  const globalStore = (globalThis as unknown as Record<string, NavigationStore | undefined>)[
+    NAVIGATION_STORE_KEY
+  ];
+
+  if (globalStore) {
+    navigationStore = globalStore;
+    return globalStore;
+  }
+
+  navigationStore = {
+    listeners: new Set(),
+    snapshot: readSnapshot(),
+  };
+
+  (globalThis as unknown as Record<string, NavigationStore>)[NAVIGATION_STORE_KEY] =
+    navigationStore;
+
+  return navigationStore;
 }
 
 function readSnapshot() {

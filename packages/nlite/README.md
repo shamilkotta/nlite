@@ -2,7 +2,7 @@
 
 React 19 framework tooling built on Vite and React Server Components.
 
-`nlite` gives you file system routing, React Server Components, streaming SSR, static generation, API routes, client navigation helpers, and an optional Cloudflare adapter.
+`nlite` gives you file system routing, React Server Components, streaming SSR, static generation, API routes, client navigation helpers, and an optional deployment adapters.
 
 ## Getting Started
 
@@ -126,15 +126,13 @@ export function CurrentRoute() {
 
 ## Configuration
 
-`defineConfig` accepts Vite config plus an optional `nlite` field:
+`defineConfig` accepts nlite configs and also accepts Vite options via a `vite` field:
 
 ```ts
 import { defineConfig } from "nlite/config";
 
 export default defineConfig({
-  nlite: {
-    appDir: "src/app",
-  },
+  appDir: "src/app",
 });
 ```
 
