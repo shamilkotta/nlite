@@ -1,6 +1,6 @@
 import React, { Suspense } from "react";
 
-import { ErrorBoundary } from "./lib/error-boundary.js";
+import { ErrorBoundary, GlobalErrorElement } from "./lib/error-boundary.js";
 import { NotFoundBoundary } from "./lib/not-found-boundary.js";
 import { RedirectBoundary } from "./lib/redirect-boundary.js";
 import { trackSearchParams } from "./internal/request-context.js";
@@ -88,7 +88,10 @@ export function createRouteElement(
     }
   }
 
-  return React.createElement(RedirectBoundary, { children: element });
+  return React.createElement(ErrorBoundary, {
+    children: React.createElement(RedirectBoundary, { children: element }),
+    FallbackComponent: GlobalErrorElement,
+  });
 }
 
 export function createRouteNotFoundElement(
@@ -145,7 +148,10 @@ export function createRouteNotFoundElement(
     }
   }
 
-  return React.createElement(RedirectBoundary, { children: element });
+  return React.createElement(ErrorBoundary, {
+    children: React.createElement(RedirectBoundary, { children: element }),
+    FallbackComponent: GlobalErrorElement,
+  });
 }
 
 export function createGlobalNotFoundElement(
@@ -185,7 +191,10 @@ export function createGlobalNotFoundElement(
     });
   }
 
-  return React.createElement(RedirectBoundary, { children: element });
+  return React.createElement(ErrorBoundary, {
+    children: React.createElement(RedirectBoundary, { children: element }),
+    FallbackComponent: GlobalErrorElement,
+  });
 }
 
 export async function collectStaticPaths(routes: NliteRouteRecord[]) {
