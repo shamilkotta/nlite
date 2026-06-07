@@ -10,7 +10,6 @@ import { tryCatch } from "../utils/index.js";
 export interface NetlifyAdapterOptions {}
 
 const FUNCTION_NAME = "__nlite";
-const DEFAULT_PUBLISH = ".nlite/client";
 const FUNCTION_SERVER_DIR = "server";
 const NETLIFY_FUNCTIONS_DIR = ".netlify/v1/functions";
 const ROOT_RSC_ALIAS = "_rsc";
@@ -163,33 +162,30 @@ async function writeNetlifyToml(root: string, logger: Logger) {
 
   if (await exists(tomlPath)) {
     const content = await fs.readFile(tomlPath, "utf8");
-    const {
-      content: updated,
-      changed,
-      previousPublish,
-    } = mergeNetlifyTomlPublish(content, DEFAULT_PUBLISH);
+    const { content: updated, changed } = mergeNetlifyToml(content);
 
     if (!changed) {
       return;
     }
 
-    if (previousPublish && previousPublish !== DEFAULT_PUBLISH) {
-      logger.info(
-        `[nlite] Updated netlify.toml [build].publish from "${previousPublish}" to "${DEFAULT_PUBLISH}".`,
-      );
-    }
+    logger.info(`[nlite] Updated netlify.toml.`);
 
     await fs.writeFile(tomlPath, updated.endsWith("\n") ? updated : `${updated}\n`);
     return;
   }
 
-  await fs.writeFile(tomlPath, `[build]\n  publish = ${JSON.stringify(DEFAULT_PUBLISH)}\n`);
-  logger.info(`[nlite] Created netlify.toml with publish directory "${DEFAULT_PUBLISH}".`);
+  await fs.writeFile(
+    tomlPath,
+    `[build]\n  command = ${JSON.stringify("nlite build")}\n  publish = ${JSON.stringify(".nlite/client")}\n`,
+  );
+  logger.info(`[nlite] Created netlify.toml`);
 }
 
-function mergeNetlifyTomlPublish(content: string, publish: string) {
+function mergeNetlifyToml(content: string) {
   const lines = content.split(/\r?\n/);
   const buildIndex = lines.findIndex((line) => /^\s*\[build\]\s*(?:#.*)?$/.test(line));
+  const command = "nlite build";
+  const publish = ".nlite/client";
 
   if (buildIndex === -1) {
     const separator =
@@ -199,7 +195,7 @@ function mergeNetlifyTomlPublish(content: string, publish: string) {
           : "\n\n"
         : "";
     return {
-      content: `${content}${separator}[build]\n  publish = ${JSON.stringify(publish)}\n`,
+      content: `${content}${separator}[build]\n  command = ${JSON.stringify(command)}\n  publish = ${JSON.stringify(publish)}\n`,
       changed: true,
     };
   }
@@ -212,26 +208,61 @@ function mergeNetlifyTomlPublish(content: string, publish: string) {
     sectionEnd++;
   }
 
+  const commandLine = `  command = ${JSON.stringify(command)}`;
   const publishLine = `  publish = ${JSON.stringify(publish)}`;
+  const commandPattern = /^\s*command\s*=\s*(['"]?)([^'"\n#]*)\1?\s*(?:#.*)?$/;
   const publishPattern = /^\s*publish\s*=\s*(['"]?)([^'"\n#]*)\1?\s*(?:#.*)?$/;
 
+  let commandIndex = -1;
+  let publishIndex = -1;
+  let previousCommand: string | undefined;
+  let previousPublish: string | undefined;
+  let commandChanged = false;
+  let publishChanged = false;
+
   for (let index = buildIndex + 1; index < sectionEnd; index++) {
-    const match = publishPattern.exec(lines[index]!);
-    if (!match) {
+    const commandMatch = commandPattern.exec(lines[index]!);
+    if (commandMatch) {
+      commandIndex = index;
+      previousCommand = commandMatch[2]?.trim();
+      if (previousCommand !== command) {
+        lines[index] = commandLine;
+        commandChanged = true;
+      }
       continue;
     }
 
-    const previousPublish = match[2]?.trim();
-    if (previousPublish === publish) {
-      return { content, changed: false, previousPublish };
+    const publishMatch = publishPattern.exec(lines[index]!);
+    if (publishMatch) {
+      publishIndex = index;
+      previousPublish = publishMatch[2]?.trim();
+      if (previousPublish !== publish) {
+        lines[index] = publishLine;
+        publishChanged = true;
+      }
     }
-
-    lines[index] = publishLine;
-    return { content: lines.join("\n"), changed: true, previousPublish };
   }
 
-  lines.splice(buildIndex + 1, 0, publishLine);
-  return { content: lines.join("\n"), changed: true };
+  if (commandIndex === -1) {
+    const insertIndex = publishIndex === -1 ? buildIndex + 1 : publishIndex;
+    lines.splice(insertIndex, 0, commandLine);
+    commandIndex = insertIndex;
+    if (publishIndex !== -1 && insertIndex <= publishIndex) {
+      publishIndex += 1;
+    }
+    commandChanged = true;
+  }
+
+  if (publishIndex === -1) {
+    lines.splice(commandIndex + 1, 0, publishLine);
+    publishChanged = true;
+  }
+
+  if (!commandChanged && !publishChanged) {
+    return { content, changed: false, previousCommand, previousPublish };
+  }
+
+  return { content: lines.join("\n"), changed: true, previousCommand, previousPublish };
 }
 
 function getGeneratorString() {

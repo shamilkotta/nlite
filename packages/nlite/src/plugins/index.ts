@@ -3,7 +3,7 @@ import { fileURLToPath } from "node:url";
 
 import react from "@vitejs/plugin-react";
 import rsc from "@vitejs/plugin-rsc";
-import type { ModuleNode, Plugin, PluginOption, ViteDevServer } from "vite";
+import type { ConfigEnv, ModuleNode, Plugin, PluginOption, ViteDevServer } from "vite";
 
 import { api } from "./api.js";
 import { resolveStaleTimes } from "../utils/constants.js";
@@ -23,6 +23,7 @@ interface ModuleGraphLike {
 export function nlite(options: NliteOptions = {}): PluginOption[] {
   const appDir = options.appDir ?? "app";
   let projectRoot = process.cwd();
+  let isProductionBuild = false;
 
   const __dirname = path.dirname(fileURLToPath(import.meta.url));
   const runtimeId = path.join(__dirname, "runtime.mjs");
@@ -33,7 +34,8 @@ export function nlite(options: NliteOptions = {}): PluginOption[] {
     applyToEnvironment(environment) {
       return environment.name !== "api";
     },
-    config() {
+    config(_config, env: ConfigEnv) {
+      isProductionBuild = env.command === "build" && env.mode === "production";
       return {
         define: {
           __NLITE_STALE_TIMES__: JSON.stringify(resolveStaleTimes(options.staleTimes)),
@@ -43,7 +45,12 @@ export function nlite(options: NliteOptions = {}): PluginOption[] {
     configResolved(config) {
       projectRoot = config.root;
     },
-    configEnvironment(_name, config) {
+    configEnvironment(name, config) {
+      if (isProductionBuild && (name === "ssr" || name === "rsc")) {
+        config.define ??= {};
+        config.define["process.env.NODE_ENV"] = JSON.stringify("production");
+      }
+
       if (config.optimizeDeps?.include) {
         config.optimizeDeps.include = config.optimizeDeps.include.map((entry) => {
           if (entry.startsWith("@vitejs/plugin-rsc")) {
