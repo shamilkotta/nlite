@@ -45,7 +45,7 @@ export function vercel(_options: VercelAdapterOptions = {}): PluginOption[] {
       await fs.rm(outputDir, { recursive: true, force: true });
 
       await copyDir(clientOutDir, path.join(outputDir, "static"));
-      const runtime = "nodejs22.x";
+      const runtime = "nodejs24.x";
       await writeVercelFunction(root, serverOutDir, runtime);
       await writeVercelConfig(root, staleTimes);
 
@@ -63,9 +63,27 @@ async function writeVercelFunction(root: string, serverOutDir: string, runtime: 
   await copyDir(serverOutDir, path.join(functionDir, SERVER_BUNDLE_DIR));
 
   await Promise.all([
+    fs.writeFile(path.join(functionDir, "entry.js"), `${createHandlerSource()}\n`),
     writeFunctionPackageJson(functionDir),
     writeFunctionConfig(functionDir, runtime),
   ]);
+}
+
+function createHandlerSource() {
+  return `import { handler } from "./${SERVER_BUNDLE_DIR}/index.js";
+
+const ASSETS = {
+  fetch(request) {
+    return fetch(request);
+  },
+};
+
+export default {
+  fetch(request, _env) {
+    return handler(request, { ..._env, ASSETS });
+  },
+};
+`;
 }
 
 async function writeFunctionPackageJson(functionDir: string) {
@@ -81,7 +99,7 @@ async function writeFunctionConfig(functionDir: string, runtime: string) {
     `${JSON.stringify(
       {
         runtime,
-        handler: `${SERVER_BUNDLE_DIR}/index.js`,
+        handler: "entry.js",
         launcherType: "Nodejs",
         supportsResponseStreaming: true,
       },

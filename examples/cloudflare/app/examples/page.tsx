@@ -23,6 +23,14 @@ export default function Page() {
         </li>
       </ul>
 
+      <h2 className="h2">Navigation</h2>
+      <ul className="link-list">
+        <li>
+          <Link href="/does-not-exist">unknown route</Link>
+          <span className="muted"> — global not-found.tsx (404)</span>
+        </li>
+      </ul>
+
       <h2 className="h2">Automatic detection</h2>
       <ul className="link-list">
         <li>

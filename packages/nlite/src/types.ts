@@ -162,3 +162,10 @@ declare global {
     __NLITE_CLOSE_RSC__?: () => void;
   }
 }
+export interface NliteStaticAssets {
+  fetch(request: Request): Promise<Response>;
+}
+
+export interface NliteHandlerEnv {
+  ASSETS?: NliteStaticAssets;
+}

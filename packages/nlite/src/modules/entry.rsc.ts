@@ -16,7 +16,7 @@ import {
   withTrackedFetch,
 } from "../internal/request-context.js";
 import { isNliteRouterError } from "../lib/navigation/errors.js";
-import type { RscPayload } from "../types.js";
+import type { RscPayload, NliteHandlerEnv } from "../types.js";
 import {
   NOT_FOUND_ROUTE_PATH,
   RESPONSE_STATUS_HEADER,
@@ -25,12 +25,6 @@ import {
 import { Document } from "../utils/elements.js";
 import { tryCatch } from "../utils/index.js";
 import { teeRscStream } from "../utils/stream.js";
-
-type WorkerEnv = {
-  ASSETS?: {
-    fetch(request: Request): Promise<Response>;
-  };
-};
 
 function toRscPathname(pathname: string) {
   return pathname.endsWith(".rsc") ? pathname.slice(0, -4) || "/" : pathname;
@@ -48,7 +42,7 @@ function onRscError(error: unknown) {
   throw error;
 }
 
-export async function handler(request: Request, _env?: WorkerEnv) {
+export async function handler(request: Request, env?: NliteHandlerEnv) {
   const url = new URL(request.url);
   const pathname = url.pathname;
 
@@ -63,6 +57,37 @@ export async function handler(request: Request, _env?: WorkerEnv) {
   const renderRequest = parseRenderRequest(request, pathname);
 
   if (renderRequest.pathname === NOT_FOUND_ROUTE_PATH) {
+    return new Response(null, { status: 404 });
+  }
+
+  const match = matchRoute(routes, renderRequest.pathname);
+
+  if (!match) {
+    if (!renderRequest.isRsc && !isDocumentRenderRequest(request, pathname)) {
+      return new Response(null, { status: 404 });
+    }
+
+    const notFoundUrl = new URL(
+      NOT_FOUND_ROUTE_PATH + (renderRequest.isRsc ? ".rsc" : ""),
+      request.url,
+    );
+
+    const assetResponse = await env?.ASSETS?.fetch(new Request(notFoundUrl, request));
+    if (assetResponse?.ok) {
+      const headers = new Headers({
+        "content-type": renderRequest.isRsc
+          ? "text/x-component;charset=utf-8"
+          : "text/html;charset=utf-8",
+        [STALE_TIME_HEADER]:
+          assetResponse.headers.get(STALE_TIME_HEADER) ?? String(__NLITE_STALE_TIMES__.dynamic),
+      });
+
+      return new Response(assetResponse.body, {
+        status: 404,
+        headers,
+      });
+    }
+
     const stream = runWithRequestContext(
       request,
       () => {
@@ -84,32 +109,6 @@ export async function handler(request: Request, _env?: WorkerEnv) {
     return finalizeRenderResponse(stream, {
       renderRequest,
       status: 404,
-    });
-  }
-
-  const match = matchRoute(routes, renderRequest.pathname);
-
-  if (!match) {
-    if (!renderRequest.isRsc && !isDocumentRenderRequest(request, pathname)) {
-      return new Response(null, { status: 404 });
-    }
-
-    const notFoundUrl = new URL(
-      NOT_FOUND_ROUTE_PATH + (renderRequest.isRsc ? ".rsc" : ""),
-      request.url,
-    );
-    const response = await fetch(new Request(notFoundUrl, request));
-    const headers = new Headers({
-      "content-type": renderRequest.isRsc
-        ? "text/x-component;charset=utf-8"
-        : "text/html;charset=utf-8",
-      [STALE_TIME_HEADER]:
-        response.headers.get(STALE_TIME_HEADER) ?? String(__NLITE_STALE_TIMES__.dynamic),
-    });
-
-    return new Response(response.body, {
-      status: response.status >= 500 ? response.status : 404,
-      headers,
     });
   }
 
