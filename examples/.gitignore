@@ -2,3 +2,4 @@ node_modules
 .nlite
 .wrangler
 .vercel
+.netlify

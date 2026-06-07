@@ -1,6 +1,6 @@
 {
   "name": "nlite",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "description": "Experimental React 19 framework on top of Vite",
   "keywords": [
     "cloudflare",

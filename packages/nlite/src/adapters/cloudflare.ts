@@ -2,7 +2,9 @@ import { fileURLToPath } from "node:url";
 import path from "node:path";
 import type { PluginOption } from "vite";
 
-export async function cloudflare(): Promise<PluginOption[]> {
+export interface CloudflareAdapterOptions {}
+
+export async function cloudflare(_options: CloudflareAdapterOptions = {}): Promise<PluginOption[]> {
   const { cloudflare: cloudflarePlugin } = await import("@cloudflare/vite-plugin");
 
   const distRoot = path.dirname(fileURLToPath(import.meta.url));

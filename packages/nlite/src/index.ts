@@ -2,8 +2,6 @@ export type {
   NliteRouter,
   NavigateOptions,
   NliteOptions,
-  NliteRouteMatch,
-  NliteRouteRecord,
   RenderingMode,
   RouterNavigateOptions,
   RouteParams,

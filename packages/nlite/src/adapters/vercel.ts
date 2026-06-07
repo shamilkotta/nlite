@@ -63,7 +63,7 @@ async function writeVercelFunction(root: string, serverOutDir: string, runtime: 
   await copyDir(serverOutDir, path.join(functionDir, SERVER_BUNDLE_DIR));
 
   await Promise.all([
-    fs.writeFile(path.join(functionDir, "entry.js"), `${createHandlerSource()}\n`),
+    fs.writeFile(path.join(functionDir, "index.js"), `${createHandlerSource()}\n`),
     writeFunctionPackageJson(functionDir),
     writeFunctionConfig(functionDir, runtime),
   ]);
@@ -99,7 +99,7 @@ async function writeFunctionConfig(functionDir: string, runtime: string) {
     `${JSON.stringify(
       {
         runtime,
-        handler: "entry.js",
+        handler: "index.js",
         launcherType: "Nodejs",
         supportsResponseStreaming: true,
       },

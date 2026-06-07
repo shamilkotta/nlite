@@ -5,5 +5,4 @@ export type {
   CollectionRecord,
   CollectionSourceConfig,
   CollectionSchemaLike,
-  NliteContentEntry,
 } from "../../types.js";
