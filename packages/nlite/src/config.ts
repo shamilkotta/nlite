@@ -53,16 +53,34 @@ function withNlitePlugin(config: NliteUserConfig) {
       client: {
         build: {
           outDir: ".nlite/client",
+          rolldownOptions: {
+            output: {
+              chunkFileNames: "_nlite/chunks/[hash].js",
+              entryFileNames: "_nlite/chunks/[hash].js",
+              assetFileNames: "_nlite/assets/[hash][extname]",
+            },
+          },
         },
       },
       ssr: {
         build: {
           outDir: ".nlite/server/ssr",
+          rolldownOptions: {
+            output: {
+              chunkFileNames: "chunks/[hash].js",
+            },
+          },
         },
       },
       rsc: {
         build: {
           outDir: ".nlite/server",
+          rolldownOptions: {
+            output: {
+              chunkFileNames: "_nlite/chunks/[hash].js",
+              assetFileNames: "_nlite/assets/[hash][extname]",
+            },
+          },
         },
       },
     },
