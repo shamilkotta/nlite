@@ -3,8 +3,7 @@
 import React, { Component, type ComponentType, type ErrorInfo, type ReactNode } from "react";
 
 import { isNliteRouterError } from "./navigation/errors.js";
-
-const STATUS_PAGE_CLASS = "_nlite_status_";
+import { STYLE_CLASS } from "../utils/constants.js";
 
 export interface ErrorBoundaryFallbackProps {
   error: Error;
@@ -99,10 +98,10 @@ function hasArrayChanged(prev: unknown[] = [], next: unknown[] = []) {
 export function GlobalErrorElement({ reset }: ErrorBoundaryFallbackProps): React.ReactElement {
   return React.createElement(
     "div",
-    { className: STATUS_PAGE_CLASS },
+    { className: STYLE_CLASS },
     React.createElement(
       "div",
-      { className: `${STATUS_PAGE_CLASS}__content` },
+      { className: `${STYLE_CLASS}__content` },
       React.createElement(
         "svg",
         {
@@ -114,7 +113,7 @@ export function GlobalErrorElement({ reset }: ErrorBoundaryFallbackProps): React
           stroke: "currentColor",
           strokeWidth: 1.5,
           "aria-hidden": true,
-          className: `${STATUS_PAGE_CLASS}__icon`,
+          className: `${STYLE_CLASS}__icon`,
         },
         React.createElement("path", {
           strokeLinecap: "round",
@@ -122,25 +121,21 @@ export function GlobalErrorElement({ reset }: ErrorBoundaryFallbackProps): React
           d: "M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z",
         }),
       ),
-      React.createElement(
-        "h1",
-        { className: `${STATUS_PAGE_CLASS}__title` },
-        "Something went wrong",
-      ),
+      React.createElement("h1", { className: `${STYLE_CLASS}__title` }, "Something went wrong"),
       React.createElement(
         "p",
-        { className: `${STATUS_PAGE_CLASS}__description` },
+        { className: `${STYLE_CLASS}__description` },
         "An unexpected error occurred. Try again or reload the page.",
       ),
       React.createElement(
         "div",
-        { className: `${STATUS_PAGE_CLASS}__actions` },
+        { className: `${STYLE_CLASS}__actions` },
         React.createElement(
           "button",
           {
             type: "button",
             onClick: reset,
-            className: `${STATUS_PAGE_CLASS}__btn ${STATUS_PAGE_CLASS}__btn--primary`,
+            className: `${STYLE_CLASS}__btn ${STYLE_CLASS}__btn--primary`,
           },
           "Try again",
         ),
@@ -149,7 +144,7 @@ export function GlobalErrorElement({ reset }: ErrorBoundaryFallbackProps): React
           {
             type: "button",
             onClick: () => window.location.reload(),
-            className: `${STATUS_PAGE_CLASS}__btn ${STATUS_PAGE_CLASS}__btn--secondary`,
+            className: `${STYLE_CLASS}__btn ${STYLE_CLASS}__btn--secondary`,
           },
           "Reload",
         ),

@@ -1,0 +1,99 @@
+._nlite_status_ {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  padding: 24px;
+  font-family: system-ui, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --nlite-status-bg: #fff;
+  --nlite-status-fg: #171717;
+  --nlite-status-muted: rgba(0, 0, 0, 0.55);
+  --nlite-status-border: rgba(0, 0, 0, 0.2);
+  background: var(--nlite-status-bg);
+  color: var(--nlite-status-fg);
+}
+
+@media (prefers-color-scheme: dark) {
+  ._nlite_status_ {
+    --nlite-status-bg: #000;
+    --nlite-status-fg: #fff;
+    --nlite-status-muted: rgba(255, 255, 255, 0.65);
+    --nlite-status-border: rgba(255, 255, 255, 0.3);
+  }
+}
+
+._nlite_status___not-found {
+  display: flex;
+  align-items: center;
+}
+
+._nlite_status___code {
+  margin: 0;
+  padding-right: 24px;
+  font: 500 24px/49px inherit;
+  border-right: 1px solid var(--nlite-status-border);
+}
+
+._nlite_status___message {
+  padding-left: 24px;
+  font-size: 14px;
+  line-height: 49px;
+}
+
+._nlite_status___content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  max-width: 420px;
+  text-align: center;
+}
+
+._nlite_status___icon {
+  margin-bottom: 20px;
+  opacity: 0.9;
+}
+
+._nlite_status___title {
+  margin: 0 0 8px;
+  font: 600 22px/1.3 inherit;
+  letter-spacing: -0.02em;
+}
+
+._nlite_status___description {
+  margin: 0 0 28px;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--nlite-status-muted);
+}
+
+._nlite_status___actions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+._nlite_status___btn {
+  padding: 10px 20px;
+  font: 500 14px inherit;
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+._nlite_status___btn--primary {
+  color: var(--nlite-status-bg);
+  background: var(--nlite-status-fg);
+  border: none;
+}
+
+._nlite_status___btn--secondary {
+  color: var(--nlite-status-fg);
+  background: transparent;
+  border: 1px solid rgba(0, 0, 0, 0.25);
+}
+
+@media (prefers-color-scheme: dark) {
+  ._nlite_status___btn--secondary {
+    border-color: rgba(255, 255, 255, 0.25);
+  }
+}

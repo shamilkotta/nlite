@@ -26,6 +26,7 @@ export default defineConfig((_opt): UserConfig[] => [
     },
     format: "esm",
     outDir: "dist",
+    copy: ["src/assets"],
     clean: true,
     sourcemap: _opt.watch ? true : false,
   },

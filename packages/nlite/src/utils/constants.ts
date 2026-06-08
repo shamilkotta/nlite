@@ -21,3 +21,5 @@ export function resolveStaleTimes(staleTimes?: StaleTimes) {
     dynamic: staleTimes?.dynamic ?? DEFAULT_STALE_TIMES.dynamic,
   };
 }
+
+export const STYLE_CLASS = "_nlite_status_";

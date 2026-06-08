@@ -1,5 +1,8 @@
 import React from "react";
 
+import "../assets/styles.css";
+import { STYLE_CLASS } from "./constants.js";
+
 export function Document({ children, pathname }: { children: React.ReactNode; pathname: string }) {
   return React.createElement(
     "html",
@@ -17,17 +20,11 @@ export function Document({ children, pathname }: { children: React.ReactNode; pa
         href: "/favicon.ico",
         sizes: "any",
       }),
-      React.createElement("style", null, STATUS_PAGE_STYLES),
       import.meta.viteRsc.loadCss(),
     ),
     React.createElement(
       "body",
       null,
-      React.createElement("script", {
-        dangerouslySetInnerHTML: {
-          __html: INLINE_BOOTSTRAP_SCRIPT,
-        },
-      }),
       React.createElement("script", {
         dangerouslySetInnerHTML: {
           __html: "window.__NLITE_DATA__=" + JSON.stringify({ pathname }),
@@ -38,109 +35,19 @@ export function Document({ children, pathname }: { children: React.ReactNode; pa
   );
 }
 
-const INLINE_BOOTSTRAP_SCRIPT = [
-  "(() => {",
-  "  const encoder = new TextEncoder();",
-  "  let controller = null;",
-  "  let closed = false;",
-  "  const pending = [];",
-  "  const stream = new ReadableStream({",
-  "    start(nextController) {",
-  "      controller = nextController;",
-  "      for (const chunk of pending) controller.enqueue(encoder.encode(chunk));",
-  "      if (closed) controller.close();",
-  "    }",
-  "  });",
-  "  window.__NLITE_READ_RSC__ = () => stream;",
-  "  window.__NLITE_PUSH_RSC__ = (chunk) => {",
-  "    if (controller) {",
-  "      controller.enqueue(encoder.encode(chunk));",
-  "      return;",
-  "    }",
-  "    pending.push(chunk);",
-  "  };",
-  "  window.__NLITE_CLOSE_RSC__ = () => {",
-  "    closed = true;",
-  "    if (controller) controller.close();",
-  "  };",
-  "})();",
-].join("");
-
 export function DefaultNotFoundElement(): React.ReactElement {
   return React.createElement(
     "div",
-    { className: STATUS_PAGE_CLASS },
+    { className: STYLE_CLASS },
     React.createElement(
       "div",
-      { className: `${STATUS_PAGE_CLASS}__not-found` },
-      React.createElement("h1", { className: `${STATUS_PAGE_CLASS}__code` }, "404"),
+      { className: `${STYLE_CLASS}__not-found` },
+      React.createElement("h1", { className: `${STYLE_CLASS}__code` }, "404"),
       React.createElement(
         "div",
-        { className: `${STATUS_PAGE_CLASS}__message` },
+        { className: `${STYLE_CLASS}__message` },
         "This page could not be found.",
       ),
     ),
   );
 }
-
-export const STATUS_PAGE_CLASS = "_nlite_status_";
-export const STATUS_PAGE_STYLES = [
-  `.${STATUS_PAGE_CLASS} {`,
-  "  display: flex; align-items: center; justify-content: center;",
-  "  min-height: 100vh; margin: 0; padding: 24px; box-sizing: border-box;",
-  '  font-family: system-ui, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;',
-  "  --nlite-status-bg: #fff;",
-  "  --nlite-status-fg: #171717;",
-  "  --nlite-status-muted: rgba(0,0,0,.55);",
-  "  --nlite-status-border: rgba(0,0,0,.2);",
-  "  --nlite-status-btn-primary-bg: #171717;",
-  "  --nlite-status-btn-primary-fg: #fff;",
-  "  --nlite-status-btn-secondary-fg: #171717;",
-  "  --nlite-status-btn-secondary-border: rgba(0,0,0,.25);",
-  "  background: var(--nlite-status-bg); color: var(--nlite-status-fg);",
-  "}",
-  "@media (prefers-color-scheme: dark) {",
-  `  .${STATUS_PAGE_CLASS} {`,
-  "    --nlite-status-bg: #000;",
-  "    --nlite-status-fg: #fff;",
-  "    --nlite-status-muted: rgba(255,255,255,.65);",
-  "    --nlite-status-border: rgba(255,255,255,.3);",
-  "    --nlite-status-btn-primary-bg: #fff;",
-  "    --nlite-status-btn-primary-fg: #000;",
-  "    --nlite-status-btn-secondary-fg: #fff;",
-  "    --nlite-status-btn-secondary-border: rgba(255,255,255,.25);",
-  "  }",
-  "}",
-  `.${STATUS_PAGE_CLASS}__not-found { display: flex; align-items: center; }`,
-  `.${STATUS_PAGE_CLASS}__code {`,
-  "  margin: 0; padding-right: 24px; font-size: 24px; font-weight: 500; line-height: 49px;",
-  "  border-right: 1px solid var(--nlite-status-border);",
-  "}",
-  `.${STATUS_PAGE_CLASS}__message { padding-left: 24px; font-size: 14px; line-height: 49px; }`,
-  `.${STATUS_PAGE_CLASS}__content {`,
-  "  display: flex; flex-direction: column; align-items: center;",
-  "  max-width: 420px; text-align: center;",
-  "}",
-  `.${STATUS_PAGE_CLASS}__icon { margin-bottom: 20px; opacity: .9; }`,
-  `.${STATUS_PAGE_CLASS}__title {`,
-  "  margin: 0 0 8px; font-size: 22px; font-weight: 600;",
-  "  letter-spacing: -.02em; line-height: 1.3;",
-  "}",
-  `.${STATUS_PAGE_CLASS}__description {`,
-  "  margin: 0 0 28px; font-size: 14px; line-height: 1.5; color: var(--nlite-status-muted);",
-  "}",
-  `.${STATUS_PAGE_CLASS}__actions {`,
-  "  display: flex; gap: 12px; flex-wrap: wrap; justify-content: center;",
-  "}",
-  `.${STATUS_PAGE_CLASS}__btn {`,
-  "  padding: 10px 20px; font-size: 14px; font-weight: 500; border-radius: 999px; cursor: pointer;",
-  "  font-family: inherit;",
-  "}",
-  `.${STATUS_PAGE_CLASS}__btn--primary {`,
-  "  color: var(--nlite-status-btn-primary-fg); background: var(--nlite-status-btn-primary-bg); border: none;",
-  "}",
-  `.${STATUS_PAGE_CLASS}__btn--secondary {`,
-  "  color: var(--nlite-status-btn-secondary-fg); background: transparent;",
-  "  border: 1px solid var(--nlite-status-btn-secondary-border);",
-  "}",
-].join("\n");
