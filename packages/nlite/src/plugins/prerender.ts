@@ -5,7 +5,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import type { ConfigEnv, Plugin, ResolvedConfig, UserConfig } from "vite";
 
 import { NOT_FOUND_HTML_FILE, NOT_FOUND_RSC_FILE, resolveStaleTimes } from "../utils/constants.js";
-import { writeAssetHeaders } from "../utils/headers.js";
+import { createPreviewHeadersMiddleware, writeAssetHeaders } from "../utils/headers.js";
 import type { NliteOptions, PrerenderPath } from "../types.js";
 import { normalizeHtmlFilePath, normalizeRoutePath, normalizeRscFilePath } from "../utils/path.js";
 import { createWorker, type WorkerProxy } from "../lib/worker/index.js";
@@ -31,6 +31,7 @@ export function prerender(options: NliteOptions = {}): Plugin {
         server.config.environments.client.build.outDir,
       );
 
+      server.middlewares.use(createPreviewHeadersMiddleware(distDir));
       server.middlewares.use((req, _res, next) => {
         const htmlPath = getPreviewHtmlRewrite(req, distDir);
 
