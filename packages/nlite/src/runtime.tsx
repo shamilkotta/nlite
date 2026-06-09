@@ -15,6 +15,7 @@ import type {
   RouteParams,
 } from "./types.js";
 import { DefaultNotFoundElement } from "./utils/elements/not-found.js";
+import { resolveRouteMetadata } from "./utils/metadata/index.js";
 
 export type { NliteRouteMatch, NliteRouteRecord, RenderingMode, RouteParams };
 
@@ -195,6 +196,26 @@ export function createGlobalNotFoundElement(
     children: React.createElement(RedirectBoundary, { children: element }),
     FallbackComponent: GlobalErrorElement,
   });
+}
+
+export async function resolveGlobalNotFoundMetadata(
+  routeRecords: NliteRouteRecord[],
+  searchParams: URLSearchParams,
+) {
+  const rootRoute = routeRecords.find((route) => route.routePath === "/");
+
+  if (!rootRoute) {
+    return { title: "404: This page could not be found" };
+  }
+
+  const resolved = await resolveRouteMetadata(rootRoute, {}, searchParams, {
+    includePage: false,
+  });
+
+  return {
+    title: resolved.title ?? "404: This page could not be found",
+    ...resolved,
+  };
 }
 
 export async function collectStaticPaths(routes: NliteRouteRecord[]) {

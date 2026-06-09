@@ -4,7 +4,6 @@ import { renderToReadableStream } from "react-dom/server.edge";
 import { prerender } from "react-dom/static.edge";
 import type { RscPayload } from "../types.js";
 import { Document } from "../utils/elements/document.js";
-import { createRouteMetadata } from "../utils/metadata.js";
 import { teeRscStream } from "../utils/stream.js";
 import {
   getURLFromRedirectError,
@@ -34,6 +33,7 @@ export async function renderHtml(rscStream: ReadableStream, _options: { ssg: boo
     } catch (error) {
       if (isRedirectError(error)) {
         htmlStream = await prerenderNavigationShell(bootstrapScriptContent, [
+          createElement("title", null, "Redirecting..."),
           createElement("meta", {
             key: "redirect",
             httpEquiv: "refresh",
@@ -42,6 +42,7 @@ export async function renderHtml(rscStream: ReadableStream, _options: { ssg: boo
         ]);
       } else if (isNotFoundError(error)) {
         htmlStream = await prerenderNavigationShell(bootstrapScriptContent, [
+          createElement("title", null, "404: This page could not be found"),
           createElement("meta", { key: "robots", name: "robots", content: "noindex" }),
         ]);
       } else {
@@ -57,6 +58,7 @@ export async function renderHtml(rscStream: ReadableStream, _options: { ssg: boo
     } catch (error) {
       if (isRedirectError(error)) {
         htmlStream = await renderNavigationShell(bootstrapScriptContent, [
+          createElement("title", null, "Redirecting..."),
           createElement("meta", {
             key: "redirect",
             httpEquiv: "refresh",
@@ -65,6 +67,7 @@ export async function renderHtml(rscStream: ReadableStream, _options: { ssg: boo
         ]);
       } else if (isNotFoundError(error)) {
         htmlStream = await renderNavigationShell(bootstrapScriptContent, [
+          createElement("title", null, "404: This page could not be found"),
           createElement("meta", { key: "robots", name: "robots", content: "noindex" }),
         ]);
       } else {
@@ -110,7 +113,7 @@ async function prerenderNavigationShell(bootstrapScriptContent: string, metadata
 
 function createNavigationShell(headExtras: React.ReactNode) {
   return createElement(Document, {
-    metadata: createRouteMetadata("/"),
+    metadata: {},
     headExtras,
   });
 }

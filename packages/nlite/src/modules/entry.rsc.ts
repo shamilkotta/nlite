@@ -7,6 +7,7 @@ import {
   createGlobalNotFoundElement,
   createRouteElement,
   matchRoute,
+  resolveGlobalNotFoundMetadata,
 } from "../runtime.js";
 import {
   DynamicPrerenderUsageError,
@@ -21,13 +22,9 @@ import {
   RESPONSE_STATUS_HEADER,
   STALE_TIME_HEADER,
 } from "../utils/constants.js";
-import { createRouteMetadata } from "../utils/metadata.js";
 import { tryCatch } from "../utils/index.js";
 import { teeRscStream } from "../utils/stream.js";
-
-function toRscPathname(pathname: string) {
-  return pathname.endsWith(".rsc") ? pathname.slice(0, -4) || "/" : pathname;
-}
+import { resolveRouteMetadata } from "../utils/metadata/index.js";
 
 function onRscError(error: unknown) {
   if (isNliteRouterError(error)) {
@@ -87,10 +84,13 @@ export async function handler(request: Request, env?: NliteHandlerEnv) {
       });
     }
 
-    const metadata = createRouteMetadata(NOT_FOUND_ROUTE_PATH);
-    const stream = runWithRequestContext(
+    const stream = await runWithRequestContext(
       request,
-      () => {
+      async () => {
+        const metadata = await resolveGlobalNotFoundMetadata(
+          routes,
+          renderRequest.url.searchParams,
+        );
         const app = createGlobalNotFoundElement(routes, renderRequest.url.searchParams);
         return renderToReadableStream<RscPayload>(
           { root: app, metadata },
@@ -110,10 +110,10 @@ export async function handler(request: Request, env?: NliteHandlerEnv) {
     });
   }
 
-  const metadata = createRouteMetadata(renderRequest.pathname);
-  const stream = runWithRequestContext(
+  const stream = await runWithRequestContext(
     request,
-    () => {
+    async () => {
+      const metadata = await resolveRouteMetadata(match.route, match.params, url.searchParams);
       const app = createRouteElement(match.route, match.params, url.searchParams);
       return renderToReadableStream<RscPayload>({ root: app, metadata }, { onError: onRscError });
     },
@@ -213,12 +213,13 @@ async function prerenderRoute(
 ) {
   const controller = new AbortController();
   const dynamicUsage = new DynamicPrerenderUsageError();
-  const metadata = createRouteMetadata(renderRequest.pathname);
+  const { route, params } = match;
   const prerenderResult = await runWithRequestContext(
     request,
     () =>
-      withTrackedFetch(() => {
-        const app = createRouteElement(match.route, match.params, renderRequest.url.searchParams);
+      withTrackedFetch(async () => {
+        const metadata = await resolveRouteMetadata(route, params, renderRequest.url.searchParams);
+        const app = createRouteElement(route, params, renderRequest.url.searchParams);
         return prerender<RscPayload>({ root: app, metadata }, createClientManifest(), {
           signal: controller.signal,
           onError: onRscError,
@@ -265,11 +266,14 @@ export async function handleGlobalNotFoundPrerender(
   const renderRequest = parseRenderRequest(request);
   const controller = new AbortController();
   const dynamicUsage = new DynamicPrerenderUsageError();
-  const metadata = createRouteMetadata(NOT_FOUND_ROUTE_PATH);
   const prerenderResult = await runWithRequestContext(
     request,
     () =>
-      withTrackedFetch(() => {
+      withTrackedFetch(async () => {
+        const metadata = await resolveGlobalNotFoundMetadata(
+          routes,
+          renderRequest.url.searchParams,
+        );
         const app = createGlobalNotFoundElement(routes, renderRequest.url.searchParams);
 
         return prerender<RscPayload>({ root: app, metadata }, createClientManifest(), {
@@ -318,7 +322,7 @@ function isDocumentRenderRequest(request: Request, pathname: string) {
 
 function parseRenderRequest(request: Request, pathname = new URL(request.url).pathname) {
   const url = new URL(request.url);
-  const pagePathname = toRscPathname(pathname);
+  const pagePathname = pathname.endsWith(".rsc") ? pathname.slice(0, -4) || "/" : pathname;
 
   return {
     isRsc: pathname.endsWith(".rsc"),

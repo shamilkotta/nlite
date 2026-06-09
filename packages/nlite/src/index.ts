@@ -7,6 +7,7 @@ export type {
   RouteParams,
   StaleTimes,
 } from "./types.js";
+export type { GenerateMetadata, Metadata } from "./utils/metadata/index.js";
 export {
   ErrorBoundary,
   type ErrorBoundaryProps,

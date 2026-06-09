@@ -1,6 +1,7 @@
 import type { ComponentType, ReactNode } from "react";
 
 import type { ErrorBoundaryFallbackComponent } from "./lib/error-boundary.js";
+import { MetadataModule } from "./utils/metadata/index.js";
 
 export type RenderingMode = "force-ssg" | "force-ssr";
 
@@ -13,11 +14,37 @@ export interface PrerenderPath {
   forcePrerender: boolean;
 }
 
-export interface RscPayload {
-  root: React.ReactNode;
+export interface RouteMetadata {
+  title?: string;
+  description?: string;
+  keywords?: string;
+  robots?: string;
+  canonical?: string;
+  openGraph?: {
+    title?: string;
+    description?: string;
+    url?: string;
+    siteName?: string;
+    images?: string[];
+  };
+  twitter?: {
+    card?: "summary" | "summary_large_image" | "app" | "player";
+    title?: string;
+    description?: string;
+    images?: string[];
+  };
+  icons?: {
+    icon?: string[];
+    apple?: string[];
+  };
 }
 
-export interface NlitePageModule {
+export interface RscPayload {
+  root: React.ReactNode;
+  metadata: RouteMetadata;
+}
+
+export interface NlitePageModule extends MetadataModule {
   default: ComponentType<{
     params: Promise<RouteParams>;
     searchParams: Promise<URLSearchParams>;
@@ -26,7 +53,7 @@ export interface NlitePageModule {
   generateStaticParams?: () => RouteParams[] | Promise<RouteParams[]>;
 }
 
-interface NliteModuleComponent {
+interface NliteModuleComponent extends MetadataModule {
   default: ComponentType<{
     children: ReactNode;
     params: Promise<RouteParams>;

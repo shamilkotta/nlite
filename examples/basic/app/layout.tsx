@@ -1,7 +1,16 @@
+import type { Metadata } from "nlite";
 import type { PropsWithChildren } from "react";
 import Link from "nlite/link";
 
 import "./styles.css";
+
+export const metadata: Metadata = {
+  title: {
+    default: "nlite basic",
+    template: "%s · nlite basic",
+  },
+  description: "Experimental React 19 framework examples",
+};
 
 export default function RootLayout({ children }: PropsWithChildren) {
   return (
