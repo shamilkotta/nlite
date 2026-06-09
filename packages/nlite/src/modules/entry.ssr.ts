@@ -3,6 +3,8 @@ import React, { createElement } from "react";
 import { renderToReadableStream } from "react-dom/server.edge";
 import { prerender } from "react-dom/static.edge";
 import type { RscPayload } from "../types.js";
+import { Document } from "../utils/elements/document.js";
+import { createRouteMetadata } from "../utils/metadata.js";
 import { teeRscStream } from "../utils/stream.js";
 import {
   getURLFromRedirectError,
@@ -15,7 +17,8 @@ export async function renderHtml(rscStream: ReadableStream, _options: { ssg: boo
   let payload: Promise<RscPayload>;
   function SsrRoot() {
     payload ??= createFromReadableStream<RscPayload>(rscStream1);
-    return React.use(payload).root;
+    const { root, metadata } = React.use(payload);
+    return createElement(Document, { metadata, children: root });
   }
   const bootstrapScriptContent = await import.meta.viteRsc.loadBootstrapScriptContent("index");
 
@@ -97,18 +100,19 @@ function reportRenderError(error: unknown) {
 }
 
 function renderNavigationShell(bootstrapScriptContent: string, metadata: React.ReactNode) {
-  return renderToReadableStream(
-    createElement("html", null, createElement("head", null, metadata), createElement("body")),
-    { bootstrapScriptContent },
-  );
+  return renderToReadableStream(createNavigationShell(metadata), { bootstrapScriptContent });
 }
 
 async function prerenderNavigationShell(bootstrapScriptContent: string, metadata: React.ReactNode) {
-  const result = await prerender(
-    createElement("html", null, createElement("head", null, metadata), createElement("body")),
-    { bootstrapScriptContent },
-  );
+  const result = await prerender(createNavigationShell(metadata), { bootstrapScriptContent });
   return result.prelude;
+}
+
+function createNavigationShell(headExtras: React.ReactNode) {
+  return createElement(Document, {
+    metadata: createRouteMetadata("/"),
+    headExtras,
+  });
 }
 
 if (import.meta.hot) {

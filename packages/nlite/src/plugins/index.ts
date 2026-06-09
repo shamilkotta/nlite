@@ -6,6 +6,7 @@ import rsc from "@vitejs/plugin-rsc";
 import type { ConfigEnv, ModuleNode, Plugin, PluginOption, ViteDevServer } from "vite";
 
 import { api } from "./api.js";
+import { assets } from "./assets.js";
 import { resolveStaleTimes } from "../utils/constants.js";
 import { discoverRoutes } from "../utils/fs-routes.js";
 import { prerender } from "./prerender.js";
@@ -100,6 +101,7 @@ export function nlite(options: NliteOptions = {}): PluginOption[] {
         client: path.join(__dirname, "modules", "entry.browser"),
       },
     }),
+    assets(),
     prerender(options),
     api(options),
   ];

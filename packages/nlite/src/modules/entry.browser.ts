@@ -1,4 +1,4 @@
-import { startTransition } from "react";
+import React, { startTransition } from "react";
 import { hydrateRoot, type Root } from "react-dom/client";
 import { createFromReadableStream } from "@vitejs/plugin-rsc/browser";
 
@@ -9,6 +9,7 @@ import {
 } from "../lib/navigation/client.js";
 import { fetchRouteTree, invalidateRouteCache, prefetchRoute } from "../lib/route-cache.js";
 import type { RouterNavigateOptions, RscPayload } from "../types.js";
+import { Document } from "../utils/elements/document.js";
 
 let navigationRoot: Root | null = null;
 let navigationVersion = 0;
@@ -20,7 +21,7 @@ async function bootNavigation() {
     : await fetchRouteTree(new URL(window.location.href), createRscHref);
 
   setNavigationSnapshot(new URL(window.location.href));
-  navigationRoot = hydrateRoot(document, (payload as RscPayload).root);
+  navigationRoot = hydrateRoot(document, renderDocument(payload as RscPayload));
   setNavigationRuntime(createNavigationRuntime());
 
   window.addEventListener("popstate", () => {
@@ -126,7 +127,7 @@ async function renderUrl(
   setNavigationSnapshot(url);
 
   startTransition(() => {
-    navigationRoot?.render((nextRoot as RscPayload).root);
+    navigationRoot?.render(renderDocument(nextRoot as RscPayload));
   });
 
   if (options.scroll) {
@@ -160,6 +161,10 @@ function scrollToTarget(hash: string) {
 
   const element = document.getElementById(decodeURIComponent(hash.slice(1)));
   element?.scrollIntoView();
+}
+
+function renderDocument(payload: RscPayload) {
+  return React.createElement(Document, { metadata: payload.metadata }, payload.root);
 }
 
 bootNavigation();

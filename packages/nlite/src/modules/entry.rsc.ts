@@ -1,4 +1,3 @@
-import React from "react";
 import { renderToReadableStream } from "@vitejs/plugin-rsc/rsc";
 import { prerender } from "@vitejs/plugin-rsc/vendor/react-server-dom/static.edge";
 import { createClientManifest } from "@vitejs/plugin-rsc/core/rsc";
@@ -22,7 +21,7 @@ import {
   RESPONSE_STATUS_HEADER,
   STALE_TIME_HEADER,
 } from "../utils/constants.js";
-import { Document } from "../utils/elements.js";
+import { createRouteMetadata } from "../utils/metadata.js";
 import { tryCatch } from "../utils/index.js";
 import { teeRscStream } from "../utils/stream.js";
 
@@ -88,20 +87,19 @@ export async function handler(request: Request, env?: NliteHandlerEnv) {
       });
     }
 
+    const metadata = createRouteMetadata(NOT_FOUND_ROUTE_PATH);
     const stream = runWithRequestContext(
       request,
       () => {
         const app = createGlobalNotFoundElement(routes, renderRequest.url.searchParams);
-        const documentNode = React.createElement(Document, {
-          children: app,
-          pathname,
-        });
-        const rscPayload = { root: documentNode };
-        return renderToReadableStream<RscPayload>(rscPayload, {
-          onError: (error: unknown) => {
-            throw error;
+        return renderToReadableStream<RscPayload>(
+          { root: app, metadata },
+          {
+            onError: (error: unknown) => {
+              throw error;
+            },
           },
-        });
+        );
       },
       { searchParams: url.searchParams },
     );
@@ -112,18 +110,12 @@ export async function handler(request: Request, env?: NliteHandlerEnv) {
     });
   }
 
+  const metadata = createRouteMetadata(renderRequest.pathname);
   const stream = runWithRequestContext(
     request,
     () => {
       const app = createRouteElement(match.route, match.params, url.searchParams);
-      const documentNode = React.createElement(Document, {
-        children: app,
-        pathname,
-      });
-      const rscPayload = { root: documentNode };
-      return renderToReadableStream<RscPayload>(rscPayload, {
-        onError: onRscError,
-      });
+      return renderToReadableStream<RscPayload>({ root: app, metadata }, { onError: onRscError });
     },
     { searchParams: url.searchParams },
   );
@@ -221,19 +213,13 @@ async function prerenderRoute(
 ) {
   const controller = new AbortController();
   const dynamicUsage = new DynamicPrerenderUsageError();
-
+  const metadata = createRouteMetadata(renderRequest.pathname);
   const prerenderResult = await runWithRequestContext(
     request,
     () =>
       withTrackedFetch(() => {
         const app = createRouteElement(match.route, match.params, renderRequest.url.searchParams);
-        const documentNode = React.createElement(Document, {
-          children: app,
-          pathname: renderRequest.pathname,
-        });
-        const rscPayload = { root: documentNode };
-
-        return prerender<RscPayload>(rscPayload, createClientManifest(), {
+        return prerender<RscPayload>({ root: app, metadata }, createClientManifest(), {
           signal: controller.signal,
           onError: onRscError,
         });
@@ -279,19 +265,14 @@ export async function handleGlobalNotFoundPrerender(
   const renderRequest = parseRenderRequest(request);
   const controller = new AbortController();
   const dynamicUsage = new DynamicPrerenderUsageError();
-
+  const metadata = createRouteMetadata(NOT_FOUND_ROUTE_PATH);
   const prerenderResult = await runWithRequestContext(
     request,
     () =>
       withTrackedFetch(() => {
         const app = createGlobalNotFoundElement(routes, renderRequest.url.searchParams);
-        const documentNode = React.createElement(Document, {
-          children: app,
-          pathname: NOT_FOUND_ROUTE_PATH,
-        });
-        const rscPayload = { root: documentNode };
 
-        return prerender<RscPayload>(rscPayload, createClientManifest(), {
+        return prerender<RscPayload>({ root: app, metadata }, createClientManifest(), {
           onError: (error: unknown) => {
             if (error instanceof DynamicPrerenderUsageError) {
               return;

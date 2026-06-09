@@ -17,6 +17,11 @@ declare module "virtual:nlite/api" {
   export { apiHandler, couldMatchApi };
 }
 
+declare module "virtual:nlite/assets" {
+  export const scripts: string | null;
+  export const styles: string | null;
+}
+
 declare module "virtual:nlite/content" {
   const collections: Record<
     string,

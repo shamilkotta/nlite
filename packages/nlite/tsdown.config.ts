@@ -22,7 +22,14 @@ export default defineConfig((_opt): UserConfig[] => [
     },
     dts: true,
     deps: {
-      neverBundle: ["virtual:nlite/routes", "virtual:nlite/api", "virtual:nlite/content", "nlite"],
+      neverBundle: [
+        "virtual:nlite/routes",
+        "virtual:nlite/api",
+        "virtual:nlite/content",
+        "virtual:nlite/assets",
+        "nlite",
+        /\.css$/,
+      ],
     },
     format: "esm",
     outDir: "dist",

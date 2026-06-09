@@ -14,7 +14,7 @@ import type {
   RenderingMode,
   RouteParams,
 } from "./types.js";
-import { DefaultNotFoundElement } from "./utils/elements.js";
+import { DefaultNotFoundElement } from "./utils/elements/not-found.js";
 
 export type { NliteRouteMatch, NliteRouteRecord, RenderingMode, RouteParams };
 
