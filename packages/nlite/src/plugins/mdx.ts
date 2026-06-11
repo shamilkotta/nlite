@@ -1,7 +1,7 @@
 import path from "node:path";
 import { readFile } from "node:fs/promises";
 
-import mdxRollup from "@mdx-js/rollup";
+import mdxRollup, { type Options as MdxRollupOptions } from "@mdx-js/rollup";
 import matter from "gray-matter";
 import { glob } from "tinyglobby";
 import type { ModuleNode, Plugin, PluginOption, ResolvedConfig, ViteDevServer } from "vite";
@@ -26,6 +26,7 @@ interface ModuleGraphLike {
 export interface NliteMdxOptions {
   contentDir?: string;
   collections?: CollectionRecord;
+  mdxOptions?: MdxRollupOptions;
 }
 
 interface ParsedContentFile {
@@ -92,6 +93,7 @@ export function mdx(options: NliteMdxOptions = {}): PluginOption[] {
     contentPlugin,
     mdxRollup({
       include: /\.(md|mdx)(\?.*)?$/,
+      ...options.mdxOptions,
     }),
   ];
 }

@@ -36,7 +36,7 @@ async function resolveConfig(config: NliteUserConfigExport, env: ConfigEnv) {
   return await config;
 }
 
-const customLogger = createLogger("info", { prefix: "[NLITE]" });
+const customLogger = createLogger("info", { prefix: "[nlite]" });
 
 function withNlitePlugin(config: NliteUserConfig) {
   const { vite, plugins: topLevelPlugins = [], ...nliteOptions } = config;
