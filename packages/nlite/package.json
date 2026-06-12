@@ -1,6 +1,6 @@
 {
   "name": "nlite",
-  "version": "0.7.1",
+  "version": "0.7.2",
   "description": "Experimental React 19 framework on top of Vite",
   "keywords": [
     "cloudflare",
@@ -28,6 +28,7 @@
   },
   "files": [
     "bin",
+    "client.d.ts",
     "dist",
     "LICENSE",
     "README.md"
@@ -60,6 +61,9 @@
     "./config": {
       "types": "./dist/config.d.mts",
       "import": "./dist/config.mjs"
+    },
+    "./client": {
+      "types": "./client.d.ts"
     },
     "./mdx": {
       "types": "./dist/lib/mdx.d.mts",

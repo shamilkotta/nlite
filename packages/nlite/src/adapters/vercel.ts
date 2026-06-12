@@ -11,8 +11,6 @@ export interface VercelAdapterOptions {}
 const FUNCTION_NAME = "__nlite";
 const SERVER_BUNDLE_DIR = "server";
 const VERCEL_OUTPUT_DIR = ".vercel/output";
-const STATIC_RSC_ROUTE = "/(.*\\.rsc)";
-const CLEAN_URL_ROUTE = "/((?:[^/]+/)*[^/.]+)$";
 
 export function vercel(_options: VercelAdapterOptions = {}): PluginOption[] {
   let config: ResolvedConfig;
@@ -120,7 +118,12 @@ async function writeVercelConfig(root: string, staleTimes: { static: number; dyn
         version: 3,
         routes: [
           {
-            src: STATIC_RSC_ROUTE,
+            src: "/(.*)/$",
+            status: 308,
+            headers: { Location: "/$1" },
+          },
+          {
+            src: "/(.*\\.rsc)",
             headers: { [STALE_TIME_HEADER]: String(staleTimes.static) },
             continue: true,
           },
@@ -130,7 +133,7 @@ async function writeVercelConfig(root: string, staleTimes: { static: number; dyn
             continue: true,
           },
           {
-            src: CLEAN_URL_ROUTE,
+            src: "/((?:[^/]+/)*[^/.]+)$",
             dest: "/$1.html",
             check: true,
           },

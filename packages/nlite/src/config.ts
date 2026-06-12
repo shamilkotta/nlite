@@ -1,6 +1,7 @@
 import {
   createLogger,
   defineConfig as defineViteConfig,
+  loadEnv,
   mergeConfig,
   type ConfigEnv,
   type UserConfig,
@@ -21,6 +22,7 @@ type NliteUserConfigExport =
 
 export function defineConfig(config: NliteUserConfigExport) {
   return defineViteConfig(async (env) => {
+    Object.assign(process.env, loadEnv(env.mode, process.cwd(), ""));
     const resolved = await resolveConfig(config, env);
     return withNlitePlugin(resolved);
   });
@@ -49,6 +51,7 @@ function withNlitePlugin(config: NliteUserConfig) {
       outDir: ".nlite",
       emptyOutDir: true,
     },
+    envPrefix: ["NLITE_PUBLIC_"],
     environments: {
       client: {
         build: {
