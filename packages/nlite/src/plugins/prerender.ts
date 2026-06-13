@@ -70,12 +70,7 @@ function getPreviewHtmlRewrite(
 
   const { pathname, query } = parsedUrl;
 
-  if (
-    pathname.startsWith("/api/") ||
-    Boolean(path.extname(pathname)) ||
-    pathname.split("/").pop()?.includes(".")
-  )
-    return;
+  if (Boolean(path.extname(pathname)) || pathname.split("/").pop()?.includes(".")) return;
 
   const htmlRelative = normalizeHtmlFilePath(normalizeRoutePath(pathname));
   if (!existsSync(path.join(distDir, htmlRelative))) {

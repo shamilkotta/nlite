@@ -53,18 +53,31 @@ export async function discoverRoutes(projectRoot: string, appDir = "app") {
 
 export async function discoverApiRoutes(projectRoot: string, appDir = "app") {
   const appRoot = path.resolve(projectRoot, appDir);
-  const apiRoot = path.resolve(appRoot, "api");
-  const routeFiles = await glob(`**/route.{${FILE_EXTENSIONS.join(",")}}`, {
-    cwd: apiRoot,
+  const routeFiles = await glob(`**/route.{ts,js}`, {
+    cwd: appRoot,
     absolute: true,
     onlyFiles: true,
   });
 
-  const routes: DiscoveredApiRoute[] = routeFiles.sort().map((routeFile) => ({
-    id: toPosix(path.relative(projectRoot, routeFile)),
-    routePath: toRoutePath(appRoot, routeFile),
-    routeFile,
-  }));
+  const routes: DiscoveredApiRoute[] = [];
+
+  for (const routeFile of routeFiles.sort()) {
+    const routeDir = path.dirname(routeFile);
+    const pageFile = await findConventionFile(routeDir, "page");
+
+    if (pageFile) {
+      const segment = toPosix(path.relative(appRoot, routeDir)) || ".";
+      throw new Error(
+        `Route segment "${segment}" has both a page and route module. A segment cannot use both "page" and "route" files.`,
+      );
+    }
+
+    routes.push({
+      id: toPosix(path.relative(projectRoot, routeFile)),
+      routePath: toRoutePath(appRoot, routeFile),
+      routeFile,
+    });
+  }
 
   return routes.sort((left, right) => scoreRoute(right.routePath) - scoreRoute(left.routePath));
 }

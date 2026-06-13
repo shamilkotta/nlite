@@ -71,7 +71,7 @@ pnpm dev
 - `page.tsx` creates a page route.
 - `layout.tsx` wraps routes below that segment.
 - `loading.tsx` and `error.tsx` provide segment UI.
-- `api/**/route.ts` creates API routes.
+- `route.ts` creates a route handler at that segment's URL path.
 - `[id]` creates a dynamic segment.
 - `[...slug]` creates a catch-all segment.
 

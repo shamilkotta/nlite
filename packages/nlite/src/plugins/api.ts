@@ -71,11 +71,10 @@ export function api(options: NliteOptions = {}): PluginOption[] {
     },
     configureServer(server) {
       const appRoot = path.resolve(server.config.root, appDir);
-      const apiRoot = path.join(appRoot, "api");
 
-      server.watcher.add(apiRoot);
-      server.watcher.on("add", (file) => invalidateApiRoutes(server, apiRoot, file));
-      server.watcher.on("unlink", (file) => invalidateApiRoutes(server, apiRoot, file));
+      server.watcher.add(appRoot);
+      server.watcher.on("add", (file) => invalidateApiRoutes(server, appRoot, file));
+      server.watcher.on("unlink", (file) => invalidateApiRoutes(server, appRoot, file));
     },
     resolveId(id) {
       if (id === RESOLVED_API_MANIFEST_ID || id === apiRuntimeId) {
@@ -105,12 +104,12 @@ export function api(options: NliteOptions = {}): PluginOption[] {
   return [environmentPlugin, buildPlugin, apiPlugin];
 }
 
-function invalidateApiRoutes(server: ViteDevServer, apiRoot: string, file: string) {
-  const relative = path.relative(apiRoot, file);
-  const isWithinApiRoot =
+function invalidateApiRoutes(server: ViteDevServer, appRoot: string, file: string) {
+  const relative = path.relative(appRoot, file);
+  const isWithinAppRoot =
     relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative));
 
-  if (!isWithinApiRoot) {
+  if (!isWithinAppRoot || !isRouteConventionFile(file)) {
     return;
   }
 
@@ -120,6 +119,16 @@ function invalidateApiRoutes(server: ViteDevServer, apiRoot: string, file: strin
   if (apiEnvironment && "moduleGraph" in apiEnvironment) {
     invalidateApiManifest(apiEnvironment.moduleGraph as unknown as ModuleGraphLike);
   }
+}
+
+function isRouteConventionFile(file: string) {
+  const extension = path.extname(file).slice(1);
+
+  if (!["ts", "js"].includes(extension)) {
+    return false;
+  }
+
+  return path.basename(file, path.extname(file)) === "route";
 }
 
 function invalidateApiManifest(moduleGraph: ModuleGraphLike) {

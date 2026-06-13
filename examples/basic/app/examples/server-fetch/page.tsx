@@ -9,7 +9,7 @@ export default async function Page() {
   const renderedAt = getRenderTimestamp();
   const pageFetchStartedAt = getRenderTimestamp();
 
-  const status = await fetchApiJson<ServiceStatus>("/api/status");
+  const status = await fetchApiJson<ServiceStatus>("/status");
   const user = await fetchApiJson<UserPublicRecord>("/api/users/demo");
   const pageFetchFinishedAt = getRenderTimestamp();
 
