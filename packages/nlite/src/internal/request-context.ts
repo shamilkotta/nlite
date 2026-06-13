@@ -5,7 +5,7 @@ type DynamicReason = "headers" | "cookies" | "searchParams" | "fetch";
 interface RequestContext {
   request: Request;
   searchParams: URLSearchParams;
-  onDynamicUsage?: (reason: DynamicReason) => void;
+  onDynamicUsage?: (reason: DynamicReason) => Promise<void>;
 }
 
 export class DynamicPrerenderUsageError extends Error {
@@ -29,7 +29,7 @@ export function runWithRequestContext<T>(
   callback: () => T,
   options: {
     searchParams?: URLSearchParams;
-    onDynamicUsage?: (reason: DynamicReason) => void;
+    onDynamicUsage?: (reason: DynamicReason) => Promise<void>;
   } = {},
 ) {
   const url = new URL(request.url);
@@ -45,26 +45,26 @@ export function runWithRequestContext<T>(
 }
 
 export function markDynamicUsage(reason: DynamicReason) {
-  requestContext.getStore()?.onDynamicUsage?.(reason);
+  return requestContext.getStore()?.onDynamicUsage?.(reason);
 }
 
 export async function headers() {
   const context = getRequestContext("headers");
-  markDynamicUsage("headers");
+  await markDynamicUsage("headers");
   return context.request.headers;
 }
 
 export async function cookies() {
   const context = getRequestContext("cookies");
-  markDynamicUsage("cookies");
+  await markDynamicUsage("cookies");
   return parseCookies(context.request.headers.get("cookie"));
 }
 
 export function trackSearchParams<T extends URLSearchParams>(value: T): Promise<T> {
   return {
     // oxlint-disable-next-line no-thenable
-    then(onFulfilled, onRejected) {
-      markDynamicUsage("searchParams");
+    async then(onFulfilled, onRejected) {
+      await markDynamicUsage("searchParams");
       return Promise.resolve(value).then(onFulfilled, onRejected);
     },
     catch(onRejected) {
@@ -81,11 +81,10 @@ export function withTrackedFetch<T>(callback: () => T) {
   const originalFetch = globalThis.fetch;
   let restoreImmediately = true;
 
-  globalThis.fetch = ((input: RequestInfo | URL, init?: RequestInit) => {
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
     if (isDynamicFetch(input, init)) {
-      markDynamicUsage("fetch");
+      await markDynamicUsage("fetch");
     }
-
     return originalFetch(input, init);
   }) as typeof fetch;
 

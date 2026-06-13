@@ -227,18 +227,15 @@ async function prerenderRoute(
       }),
     {
       searchParams: renderRequest.url.searchParams,
-      onDynamicUsage() {
+      async onDynamicUsage() {
         if (!options.forcePrerender) {
-          options.onDynamicUsage?.();
+          // options.onDynamicUsage?.();
           controller.abort(dynamicUsage);
+          await new Promise(() => {});
         }
       },
     },
   );
-
-  if (controller.signal.aborted && controller.signal.reason instanceof DynamicPrerenderUsageError) {
-    return { stream: null, rsc: null, skip: true };
-  }
 
   if (!prerenderResult?.prelude) {
     return { stream: null, rsc: null, skip: true };
@@ -259,7 +256,7 @@ async function finalizePrerenderResult(rscStream: ReadableStream) {
 
 export async function handleGlobalNotFoundPrerender(
   request: Request,
-  options: {
+  _options: {
     onDynamicUsage?: () => void;
   },
 ) {
@@ -277,20 +274,17 @@ export async function handleGlobalNotFoundPrerender(
         const app = createGlobalNotFoundElement(routes, renderRequest.url.searchParams);
 
         return prerender<RscPayload>({ root: app, metadata }, createClientManifest(), {
+          signal: controller.signal,
           onError: (error: unknown) => {
-            if (error instanceof DynamicPrerenderUsageError) {
-              return;
-            }
-
             throw error;
           },
         });
       }),
     {
       searchParams: renderRequest.url.searchParams,
-      onDynamicUsage() {
+      async onDynamicUsage() {
         controller.abort(dynamicUsage);
-        options.onDynamicUsage?.();
+        // options.onDynamicUsage?.();
       },
     },
   );
