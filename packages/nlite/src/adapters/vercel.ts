@@ -71,9 +71,7 @@ function createHandlerSource() {
   return `import { handler } from "./${SERVER_BUNDLE_DIR}/index.js";
 
 const ASSETS = {
-  fetch(request) {
-    return fetch(request);
-  },
+  fetch,
 };
 
 export default {

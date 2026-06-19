@@ -111,9 +111,7 @@ function buildFunctionSource(serverImportPath: string, generator: string) {
   return `import { handler } from "${serverImportPath}";
 
 const ASSETS = {
-  fetch(request) {
-    return fetch(request);
-  },
+  fetch,
 };
 
 export default async (request, _env) => handler(request, { ..._env, ASSETS });
