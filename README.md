@@ -11,7 +11,7 @@ This is a curiosity driven side project for learning how RSC, streaming SSR, sta
 - Supports layouts, pages, loading UI, error UI, dynamic routes, and API routes.
 - Includes streaming SSR and static generation experiments.
 - Exposes a small CLI: `nlite dev`, `nlite build`, `nlite preview`, and `nlite start`.
-- Includes a basic Cloudflare adapter experiment.
+- Includes deployment adapter experiments for Cloudflare, Netlify, and Vercel.
 
 ## What It Is Not
 
@@ -55,7 +55,7 @@ pnpm --filter example-basic build
 pnpm --filter example-basic preview
 ```
 
-Cloudflare example:
+Deployment example (Cloudflare):
 
 ```bash
 pnpm --filter example-cloudflare dev
@@ -63,6 +63,8 @@ pnpm --filter example-cloudflare build
 pnpm --filter example-cloudflare preview
 pnpm --filter example-cloudflare deploy
 ```
+
+See [`packages/nlite/README.md`](packages/nlite/README.md#deployment) for Netlify and Vercel adapter setup.
 
 ## Package Usage
 

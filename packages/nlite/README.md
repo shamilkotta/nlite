@@ -2,7 +2,7 @@
 
 React 19 framework tooling built on Vite and React Server Components.
 
-`nlite` gives you file system routing, React Server Components, streaming SSR, static generation, API routes, client navigation helpers, and an optional deployment adapters.
+`nlite` gives you file system routing, React Server Components, streaming SSR, static generation, API routes, client navigation helpers, and optional deployment adapters.
 
 ## Getting Started
 
@@ -144,9 +144,19 @@ nlite build     # production build
 nlite preview   # preview production output
 ```
 
-## Cloudflare
+## Deployment
 
-For Cloudflare Workers builds, install the optional peer and enable the adapter.
+`nlite` ships optional deployment adapters from `nlite/adapters`:
+
+- `cloudflare`
+- `netlify`
+- `vercel`
+
+Add the adapter for your target platform to `nlite.config.ts`.
+
+### Example: Cloudflare Workers
+
+The Cloudflare adapter requires an optional dependency:
 
 ```bash
 pnpm add @cloudflare/vite-plugin
