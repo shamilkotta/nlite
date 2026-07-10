@@ -1,7 +1,7 @@
 import type { ComponentType, ReactNode } from "react";
 
 import type { ErrorBoundaryFallbackComponent } from "./lib/error-boundary.js";
-import { MetadataModule } from "./utils/metadata/index.js";
+import type { MetadataModule } from "./utils/metadata/index.js";
 
 export type RenderingMode = "force-ssg" | "force-ssr";
 
@@ -14,29 +14,101 @@ export interface PrerenderPath {
   forcePrerender: boolean;
 }
 
+export interface RouteMetadataLink {
+  rel: string;
+  href: string;
+  as?: string;
+  type?: string;
+  crossOrigin?: "" | "anonymous" | "use-credentials";
+  integrity?: string;
+  media?: string;
+  sizes?: string;
+  imageSrcSet?: string;
+  imageSizes?: string;
+  hrefLang?: string;
+  referrerPolicy?: string;
+  fetchPriority?: "high" | "low" | "auto";
+  title?: string;
+}
+
+export interface RouteMetadataIcon {
+  url: string;
+  sizes?: string;
+  type?: string;
+  media?: string;
+  color?: string;
+  rel?: string;
+  fetchPriority?: "high" | "low" | "auto";
+}
+
 export interface RouteMetadata {
   title?: string;
   description?: string;
+  applicationName?: string;
+  authors?: Array<{ name?: string; url?: string }>;
+  generator?: string;
   keywords?: string;
+  referrer?: string;
+  creator?: string;
+  publisher?: string;
   robots?: string;
+  googleBot?: string;
+  abstract?: string;
+  category?: string;
+  classification?: string;
   canonical?: string;
+  languages?: Array<{ hrefLang: string; href: string }>;
+  mediaAlternates?: Array<{ media: string; href: string }>;
+  typeAlternates?: Array<{ type: string; href: string }>;
   openGraph?: {
     title?: string;
     description?: string;
     url?: string;
     siteName?: string;
-    images?: string[];
+    locale?: string;
+    type?: string;
+    images?: Array<{ url: string; alt?: string; width?: number; height?: number; type?: string }>;
   };
   twitter?: {
     card?: "summary" | "summary_large_image" | "app" | "player";
     title?: string;
     description?: string;
-    images?: string[];
+    site?: string;
+    creator?: string;
+    images?: Array<{ url: string; alt?: string }>;
+  };
+  facebook?: {
+    appId?: string;
+    admins?: string[];
+  };
+  pinterest?: {
+    richPin?: boolean;
   };
   icons?: {
-    icon?: string[];
-    apple?: string[];
+    icon?: RouteMetadataIcon[];
+    shortcut?: RouteMetadataIcon[];
+    apple?: RouteMetadataIcon[];
+    other?: RouteMetadataIcon[];
   };
+  manifest?: string;
+  verification?: Array<{ name: string; content: string }>;
+  appleWebApp?: {
+    capable?: boolean;
+    title?: string;
+    statusBarStyle?: string;
+    startupImage?: Array<{ url: string; media?: string }>;
+  };
+  formatDetection?: string;
+  itunes?: string;
+  archives?: string[];
+  assets?: string[];
+  bookmarks?: string[];
+  pagination?: {
+    previous?: string;
+    next?: string;
+  };
+  links?: RouteMetadataLink[];
+  other?: Array<{ name: string; content: string }>;
 }
 
 export interface RscPayload {
