@@ -41,7 +41,7 @@ export function mdx(options: NliteMdxOptions = {}): PluginOption[] {
   const contentPlugin: Plugin = {
     name: "nlite:mdx",
     applyToEnvironment(environment) {
-      return environment.name !== "api";
+      return environment.name !== "client";
     },
     configResolved(config) {
       resolvedConfig = config;
@@ -89,8 +89,25 @@ export function mdx(options: NliteMdxOptions = {}): PluginOption[] {
     },
   };
 
+  const clientGuardPlugin: Plugin = {
+    name: "nlite:mdx-client-guard",
+    applyToEnvironment(environment) {
+      return environment.name === "client";
+    },
+    resolveId(id) {
+      if (id === VIRTUAL_CONTENT_ID || id === RESOLVED_CONTENT_ID) {
+        this.error(
+          `[nlite] Content APIs from "nlite/mdx" cannot be used in client components. Move getCollection()/getEntry() calls to a server component`,
+        );
+      }
+
+      return;
+    },
+  };
+
   return [
     contentPlugin,
+    clientGuardPlugin,
     mdxRollup({
       include: /\.(md|mdx)(\?.*)?$/,
       ...options.mdxOptions,
