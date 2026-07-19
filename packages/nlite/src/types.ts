@@ -201,13 +201,18 @@ export interface NliteOptions {
   staleTimes?: StaleTimes;
 }
 
-export interface NliteContentEntry<TData = unknown> {
+export interface NliteMdxProps {
+  components?: Record<string, ComponentType>;
+  [key: string]: unknown;
+}
+
+export interface NliteContentEntry<TData = unknown, CProps = NliteMdxProps> {
   id: string;
   collection: string;
   slug: string;
   body: string;
   data: TData;
-  Content: ComponentType;
+  Content: ComponentType<CProps>;
 }
 
 export type ApiRouteHandler = (

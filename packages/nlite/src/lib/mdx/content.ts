@@ -14,10 +14,7 @@ interface ContentManifest {
   [collection: string]: ContentManifestEntry[];
 }
 
-async function resolveEntry(
-  entry: ContentManifestEntry,
-  collection: string,
-): Promise<NliteContentEntry> {
+async function resolveEntry<T>(entry: ContentManifestEntry, collection: string) {
   const mod = await entry.load();
   return {
     id: entry.id,
@@ -26,7 +23,7 @@ async function resolveEntry(
     body: entry.body,
     data: entry.data,
     Content: mod.default,
-  };
+  } as NliteContentEntry<T>;
 }
 
 async function getManifest(): Promise<ContentManifest> {
@@ -40,24 +37,18 @@ async function getManifest(): Promise<ContentManifest> {
   }
 }
 
-export async function getCollection<TData = unknown>(
-  collection: string,
-): Promise<NliteContentEntry<TData>[]> {
+export async function getCollection<TData = unknown>(collection: string) {
   const manifest = await getManifest();
   const entries = manifest[collection] ?? [];
 
   return await Promise.all(
     entries.map(async (entry) => {
-      const resolved = await resolveEntry(entry, collection);
-      return resolved as NliteContentEntry<TData>;
+      return await resolveEntry<TData>(entry, collection);
     }),
   );
 }
 
-export async function getEntry<TData = unknown>(
-  collection: string,
-  idOrSlug: string,
-): Promise<NliteContentEntry<TData> | null> {
+export async function getEntry<TData = unknown>(collection: string, idOrSlug: string) {
   const manifest = await getManifest();
   const entries = manifest[collection] ?? [];
   const entry = entries.find((item) => item.id === idOrSlug || item.slug === idOrSlug);
@@ -66,5 +57,5 @@ export async function getEntry<TData = unknown>(
     return null;
   }
 
-  return (await resolveEntry(entry, collection)) as NliteContentEntry<TData>;
+  return await resolveEntry<TData>(entry, collection);
 }
