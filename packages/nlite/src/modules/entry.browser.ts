@@ -89,6 +89,7 @@ async function navigate(href: string, options: RouterNavigateOptions) {
 
   if (nextUrl.pathname === currentUrl.pathname && nextUrl.search === currentUrl.search) {
     updateBrowserHistory(nextUrl, options.replace);
+    setNavigationSnapshot(nextUrl);
 
     if (options.scroll !== false) {
       scrollToTarget(nextUrl.hash);

@@ -8,6 +8,7 @@ interface NavigationSnapshot {
   pathname: string;
   search: string;
   searchParams: URLSearchParams;
+  hash: string;
 }
 
 interface NavigationStore {
@@ -17,6 +18,7 @@ interface NavigationStore {
 
 const NAVIGATION_RUNTIME_KEY = "__NLITE_NAVIGATION_RUNTIME__";
 const NAVIGATION_STORE_KEY = "__NLITE_NAVIGATION_STORE__";
+const SERVER_NAVIGATION_URL_KEY = "__NLITE_SERVER_NAVIGATION_URL__";
 let navigationRuntime: NavigationRuntime | undefined;
 let navigationStore: NavigationStore | undefined;
 
@@ -107,6 +109,19 @@ function emit(store: NavigationStore) {
 }
 
 function getNavigationStore() {
+  if (typeof window === "undefined") {
+    // ssr / ssg
+    const url = getServerNavigationUrl();
+    navigationStore = {
+      listeners: new Set(),
+      snapshot: url
+        ? snapshotFromUrl(url)
+        : { pathname: "/", search: "", searchParams: new URLSearchParams(), hash: "" },
+    };
+
+    return navigationStore;
+  }
+
   if (navigationStore) {
     return navigationStore;
   }
@@ -122,7 +137,7 @@ function getNavigationStore() {
 
   navigationStore = {
     listeners: new Set(),
-    snapshot: readSnapshot(),
+    snapshot: snapshotFromUrl(new URL(window.location.href)),
   };
 
   (globalThis as unknown as Record<string, NavigationStore>)[NAVIGATION_STORE_KEY] =
@@ -131,16 +146,10 @@ function getNavigationStore() {
   return navigationStore;
 }
 
-function readSnapshot() {
-  if (typeof window === "undefined") {
-    return {
-      pathname: "/",
-      search: "",
-      searchParams: new URLSearchParams(),
-    };
-  }
-
-  return snapshotFromUrl(new URL(window.location.href));
+function getServerNavigationUrl() {
+  return (globalThis as unknown as Record<string, (() => URL | undefined) | undefined>)[
+    SERVER_NAVIGATION_URL_KEY
+  ]?.();
 }
 
 function snapshotFromUrl(url: URL): NavigationSnapshot {
@@ -148,5 +157,6 @@ function snapshotFromUrl(url: URL): NavigationSnapshot {
     pathname: url.pathname,
     search: url.search,
     searchParams: new URLSearchParams(url.search),
+    hash: url.hash,
   };
 }

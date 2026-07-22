@@ -5,13 +5,14 @@ import { prerender } from "react-dom/static.edge";
 import type { RscPayload } from "../types.js";
 import { Document } from "../utils/elements/document.js";
 import { teeRscStream } from "../utils/stream.js";
+import { runWithNavigationUrl } from "../internal/navigation-context.js";
 import {
   getURLFromRedirectError,
   isNotFoundError,
   isRedirectError,
 } from "../lib/navigation/errors.js";
 
-export async function renderHtml(rscStream: ReadableStream, _options: { ssg: boolean }) {
+export async function renderHtml(rscStream: ReadableStream, _options: { ssg: boolean; url: URL }) {
   const [rscStream1, rscStream2] = await teeRscStream(rscStream);
   let payload: Promise<RscPayload>;
   function SsrRoot() {
@@ -25,10 +26,12 @@ export async function renderHtml(rscStream: ReadableStream, _options: { ssg: boo
   let status: number | undefined;
   if (_options?.ssg) {
     try {
-      const prerenderResult = await prerender(createElement(SsrRoot), {
-        bootstrapScriptContent,
-        onError: reportRenderError,
-      });
+      const prerenderResult = await runWithNavigationUrl(_options.url, () =>
+        prerender(createElement(SsrRoot), {
+          bootstrapScriptContent,
+          onError: reportRenderError,
+        }),
+      );
       htmlStream = prerenderResult.prelude;
     } catch (error) {
       if (isRedirectError(error)) {
@@ -51,10 +54,12 @@ export async function renderHtml(rscStream: ReadableStream, _options: { ssg: boo
     }
   } else {
     try {
-      htmlStream = await renderToReadableStream(createElement(SsrRoot), {
-        onError: reportRenderError,
-        bootstrapScriptContent,
-      });
+      htmlStream = await runWithNavigationUrl(_options.url, () =>
+        renderToReadableStream(createElement(SsrRoot), {
+          onError: reportRenderError,
+          bootstrapScriptContent,
+        }),
+      );
     } catch (error) {
       if (isRedirectError(error)) {
         htmlStream = await renderNavigationShell(bootstrapScriptContent, [

@@ -154,6 +154,7 @@ async function finalizeRenderResponse(
   );
   const { stream: htmlStream, status: renderStatus } = await ssrEntry.renderHtml(rscStream, {
     ssg: false,
+    url: options.renderRequest.url,
   });
 
   return new Response(htmlStream, {
@@ -244,16 +245,16 @@ async function prerenderRoute(
     return { stream: null, rsc: null, skip: true };
   }
 
-  return finalizePrerenderResult(prerenderResult.prelude);
+  return finalizePrerenderResult(prerenderResult.prelude, renderRequest.url);
 }
 
-async function finalizePrerenderResult(rscStream: ReadableStream) {
+async function finalizePrerenderResult(rscStream: ReadableStream, url: URL) {
   const ssrEntry = await import.meta.viteRsc.loadModule<typeof import("./entry.ssr.ts")>(
     "ssr",
     "index",
   );
   const [rscStream1, rscStream2] = await teeRscStream(rscStream);
-  const { stream: htmlStream } = await ssrEntry.renderHtml(rscStream1, { ssg: true });
+  const { stream: htmlStream } = await ssrEntry.renderHtml(rscStream1, { ssg: true, url });
   return { stream: htmlStream, rsc: rscStream2, skip: false };
 }
 
@@ -298,7 +299,7 @@ export async function handleGlobalNotFoundPrerender(
   if (!prerenderResult?.prelude) {
     return { stream: null, rsc: null, skip: true };
   }
-  return finalizePrerenderResult(prerenderResult.prelude);
+  return finalizePrerenderResult(prerenderResult.prelude, renderRequest.url);
 }
 
 function isDocumentRenderRequest(request: Request, pathname: string) {
