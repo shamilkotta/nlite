@@ -71,6 +71,18 @@ importers:
         specifier: ^5.9.3
         version: 5.9.3
 
+  examples/ppr:
+    dependencies:
+      nlite:
+        specifier: workspace:*
+        version: link:../../packages/nlite
+      react:
+        specifier: ^19.2.5
+        version: 19.2.5
+      react-dom:
+        specifier: ^19.2.5
+        version: 19.2.5(react@19.2.5)
+
   packages/nlite:
     dependencies:
       '@vitejs/plugin-react':

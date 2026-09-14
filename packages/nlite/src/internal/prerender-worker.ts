@@ -41,18 +41,21 @@ export async function renderRoute({
   }
 
   const request = new Request(new URL(routePath, PRERENDER_ORIGIN));
-  const { rsc, stream, skip } = await entry.handlePrerender(request, {
+  const result = await entry.handlePrerender(request, {
     forcePrerender,
     onDynamicUsage() {
       process.send?.({ type: "dynamicUsage" });
     },
   });
 
-  if (skip || !stream || !rsc) {
+  if (result.skip) {
     return { skip: true };
   }
 
-  const [streamBytes, rscBytes] = await Promise.all([readStream(stream), readStream(rsc)]);
+  const [streamBytes, rscBytes] = await Promise.all([
+    readStream(result.stream),
+    readStream(result.rsc),
+  ]);
   return {
     skip: false,
     stream: [...streamBytes],
@@ -74,17 +77,20 @@ export async function renderNotFound({
   }
 
   const request = new Request(new URL(NOT_FOUND_ROUTE_PATH, PRERENDER_ORIGIN));
-  const { rsc, stream, skip } = await entry.handleGlobalNotFoundPrerender(request, {
+  const result = await entry.handleGlobalNotFoundPrerender(request, {
     onDynamicUsage() {
       process.send?.({ type: "dynamicUsage" });
     },
   });
 
-  if (skip || !stream || !rsc) {
+  if (result.skip) {
     return { skip: true };
   }
 
-  const [streamBytes, rscBytes] = await Promise.all([readStream(stream), readStream(rsc)]);
+  const [streamBytes, rscBytes] = await Promise.all([
+    readStream(result.stream),
+    readStream(result.rsc),
+  ]);
   return {
     skip: false,
     stream: [...streamBytes],

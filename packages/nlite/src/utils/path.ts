@@ -18,6 +18,14 @@ export function normalizeHtmlFilePath(routePath: string) {
   return routePath.slice(1) + ".html";
 }
 
+export function normalizePostponedFilePath(routePath: string) {
+  if (routePath === "/") {
+    return "postponed.json";
+  }
+
+  return routePath.slice(1) + ".postponed.json";
+}
+
 export function normalizeRscFilePath(routePath: string) {
   if (routePath === "/") {
     return "" + RSC_POSTFIX;
