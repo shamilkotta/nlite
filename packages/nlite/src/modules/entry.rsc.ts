@@ -11,7 +11,6 @@ import {
 } from "../runtime.js";
 import {
   DynamicPrerenderUsageError,
-  isContextError,
   runWithRequestContext,
   withTrackedFetch,
 } from "../internal/request-context.js";
@@ -31,7 +30,7 @@ function onRscError(error: unknown) {
     return error.digest;
   }
 
-  if (isContextError(error)) {
+  if (DynamicPrerenderUsageError.isInstance(error)) {
     return;
   }
 
@@ -179,6 +178,7 @@ export async function collectPrerenderPaths() {
 export async function handlePrerender(
   request: Request,
   options: {
+    enablePartialRender?: boolean;
     forcePrerender?: boolean;
     onDynamicUsage?: () => void;
   },
@@ -203,15 +203,22 @@ export async function handlePrerender(
   return initialResult;
 }
 
+type PrerenderResult =
+  | {
+      skip: true;
+    }
+  | (Awaited<ReturnType<typeof finalizePrerenderResult>> & { skip: false });
+
 async function prerenderRoute(
   match: NonNullable<ReturnType<typeof matchRoute>>,
   renderRequest: ReturnType<typeof parseRenderRequest>,
   request: Request,
   options: {
+    enablePartialRender?: boolean;
     forcePrerender?: boolean;
     onDynamicUsage?: () => void;
   },
-) {
+): Promise<PrerenderResult> {
   const controller = new AbortController();
   const dynamicUsage = new DynamicPrerenderUsageError();
   const { route, params } = match;
@@ -228,6 +235,7 @@ async function prerenderRoute(
       }),
     {
       searchParams: renderRequest.url.searchParams,
+      signal: controller.signal,
       onDynamicUsage() {
         if (!options.forcePrerender) {
           options.onDynamicUsage?.();
@@ -237,25 +245,42 @@ async function prerenderRoute(
     },
   );
 
-  if (controller.signal.aborted && controller.signal.reason instanceof DynamicPrerenderUsageError) {
-    return { stream: null, rsc: null, skip: true };
+  if (
+    controller.signal.aborted &&
+    controller.signal.reason instanceof DynamicPrerenderUsageError &&
+    !options.enablePartialRender
+  ) {
+    return { skip: true };
   }
 
   if (!prerenderResult?.prelude) {
-    return { stream: null, rsc: null, skip: true };
+    return { skip: true };
   }
 
-  return finalizePrerenderResult(prerenderResult.prelude, renderRequest.url);
+  const abort = !options.forcePrerender && options.enablePartialRender && controller.signal.aborted;
+  const result = await finalizePrerenderResult(prerenderResult.prelude, renderRequest.url, {
+    abort,
+  });
+
+  return { ...result, skip: false };
 }
 
-async function finalizePrerenderResult(rscStream: ReadableStream, url: URL) {
+async function finalizePrerenderResult(
+  rscStream: ReadableStream,
+  url: URL,
+  options: { abort?: boolean } = {},
+) {
   const ssrEntry = await import.meta.viteRsc.loadModule<typeof import("./entry.ssr.ts")>(
     "ssr",
     "index",
   );
   const [rscStream1, rscStream2] = await teeRscStream(rscStream);
-  const { stream: htmlStream } = await ssrEntry.renderHtml(rscStream1, { ssg: true, url });
-  return { stream: htmlStream, rsc: rscStream2, skip: false };
+  const { stream: htmlStream, postponed } = await ssrEntry.renderHtml(rscStream1, {
+    ssg: true,
+    url,
+    abort: options.abort,
+  });
+  return { stream: htmlStream, rsc: rscStream2, postponed };
 }
 
 export async function handleGlobalNotFoundPrerender(
@@ -263,7 +288,7 @@ export async function handleGlobalNotFoundPrerender(
   options: {
     onDynamicUsage?: () => void;
   },
-) {
+): Promise<PrerenderResult> {
   const renderRequest = parseRenderRequest(request);
   const controller = new AbortController();
   const dynamicUsage = new DynamicPrerenderUsageError();
@@ -278,6 +303,7 @@ export async function handleGlobalNotFoundPrerender(
         const app = createGlobalNotFoundElement(routes, renderRequest.url.searchParams);
 
         return prerender<RscPayload>({ root: app, metadata }, createClientManifest(), {
+          signal: controller.signal,
           onError: (error: unknown) => {
             if (error instanceof DynamicPrerenderUsageError) {
               return;
@@ -289,6 +315,7 @@ export async function handleGlobalNotFoundPrerender(
       }),
     {
       searchParams: renderRequest.url.searchParams,
+      signal: controller.signal,
       onDynamicUsage() {
         controller.abort(dynamicUsage);
         options.onDynamicUsage?.();
@@ -296,10 +323,18 @@ export async function handleGlobalNotFoundPrerender(
     },
   );
 
-  if (!prerenderResult?.prelude) {
-    return { stream: null, rsc: null, skip: true };
+  if (
+    controller.signal.aborted &&
+    controller.signal.reason instanceof DynamicPrerenderUsageError
+  ) {
+    return { skip: true };
   }
-  return finalizePrerenderResult(prerenderResult.prelude, renderRequest.url);
+
+  if (!prerenderResult?.prelude) {
+    return { skip: true };
+  }
+  const result = await finalizePrerenderResult(prerenderResult.prelude, renderRequest.url);
+  return { ...result, skip: false };
 }
 
 function isDocumentRenderRequest(request: Request, pathname: string) {

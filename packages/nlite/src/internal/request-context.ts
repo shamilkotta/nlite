@@ -5,21 +5,22 @@ type DynamicReason = "headers" | "cookies" | "searchParams" | "fetch";
 interface RequestContext {
   request: Request;
   searchParams: URLSearchParams;
+  signal?: AbortSignal;
   onDynamicUsage?: (reason: DynamicReason) => void;
 }
 
 export class DynamicPrerenderUsageError extends Error {
+  name = "DynamicPrerenderUsageError" as const;
   constructor() {
     super("Route used request-bound data during prerender");
-    this.name = "DynamicPrerenderUsageError";
   }
-}
 
-export function isContextError(error: unknown): boolean {
-  return (
-    error instanceof DynamicPrerenderUsageError ||
-    (error instanceof Error && error.name === "DynamicPrerenderUsageError")
-  );
+  static isInstance(error: unknown): error is DynamicPrerenderUsageError {
+    return (
+      error instanceof DynamicPrerenderUsageError ||
+      (error instanceof Error && error.name === "DynamicPrerenderUsageError")
+    );
+  }
 }
 
 const requestContext = new AsyncLocalStorage<RequestContext>();
@@ -29,6 +30,7 @@ export function runWithRequestContext<T>(
   callback: () => T,
   options: {
     searchParams?: URLSearchParams;
+    signal?: AbortSignal;
     onDynamicUsage?: (reason: DynamicReason) => void;
   } = {},
 ) {
@@ -38,25 +40,33 @@ export function runWithRequestContext<T>(
     {
       request,
       searchParams: options.searchParams ?? url.searchParams,
+      signal: options.signal,
       onDynamicUsage: options.onDynamicUsage,
     },
     callback,
   );
 }
 
-export function markDynamicUsage(reason: DynamicReason) {
-  requestContext.getStore()?.onDynamicUsage?.(reason);
+export function markDynamicUsage(reason: DynamicReason): Promise<void> {
+  const store = requestContext.getStore();
+  store?.onDynamicUsage?.(reason);
+
+  if (store?.signal?.aborted) {
+    return new Promise(() => {});
+  }
+
+  return Promise.resolve();
 }
 
 export async function headers() {
   const context = getRequestContext("headers");
-  markDynamicUsage("headers");
+  await markDynamicUsage("headers");
   return context.request.headers;
 }
 
 export async function cookies() {
   const context = getRequestContext("cookies");
-  markDynamicUsage("cookies");
+  await markDynamicUsage("cookies");
   return parseCookies(context.request.headers.get("cookie"));
 }
 
@@ -64,8 +74,9 @@ export function trackSearchParams<T extends URLSearchParams>(value: T): Promise<
   return {
     // oxlint-disable-next-line no-thenable
     then(onFulfilled, onRejected) {
-      markDynamicUsage("searchParams");
-      return Promise.resolve(value).then(onFulfilled, onRejected);
+      return markDynamicUsage("searchParams").then(() =>
+        Promise.resolve(value).then(onFulfilled, onRejected),
+      );
     },
     catch(onRejected) {
       return Promise.resolve(value).catch(onRejected);
@@ -82,11 +93,11 @@ export function withTrackedFetch<T>(callback: () => T) {
   let restoreImmediately = true;
 
   globalThis.fetch = ((input: RequestInfo | URL, init?: RequestInit) => {
-    if (isDynamicFetch(input, init)) {
-      markDynamicUsage("fetch");
+    if (!isDynamicFetch(input, init)) {
+      return originalFetch(input, init);
     }
 
-    return originalFetch(input, init);
+    return markDynamicUsage("fetch").then(() => originalFetch(input, init));
   }) as typeof fetch;
 
   try {

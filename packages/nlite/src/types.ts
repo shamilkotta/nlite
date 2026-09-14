@@ -199,6 +199,7 @@ export interface CollectionSourceConfig {
 export interface NliteOptions {
   appDir?: string;
   staleTimes?: StaleTimes;
+  enablePartialRender?: boolean;
 }
 
 export interface NliteMdxProps {

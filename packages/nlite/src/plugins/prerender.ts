@@ -4,10 +4,21 @@ import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import type { ConfigEnv, Plugin, ResolvedConfig, UserConfig } from "vite";
 
-import { NOT_FOUND_HTML_FILE, NOT_FOUND_RSC_FILE, resolveStaleTimes } from "../utils/constants.js";
+import {
+  NOT_FOUND_HTML_FILE,
+  NOT_FOUND_ROUTE_PATH,
+  NOT_FOUND_RSC_FILE,
+  PRERENDER_ORIGIN,
+  resolveStaleTimes,
+} from "../utils/constants.js";
 import { createPreviewHeadersMiddleware, writeAssetHeaders } from "../utils/headers.js";
 import type { NliteOptions, PrerenderPath } from "../types.js";
-import { normalizeHtmlFilePath, normalizeRoutePath, normalizeRscFilePath } from "../utils/path.js";
+import {
+  normalizeHtmlFilePath,
+  normalizePostponedFilePath,
+  normalizeRoutePath,
+  normalizeRscFilePath,
+} from "../utils/path.js";
 import { createWorker, type WorkerProxy } from "../lib/worker/index.js";
 import type { PrerenderWorker } from "../internal/prerender-worker.js";
 
@@ -86,40 +97,43 @@ async function renderStatic(config: ResolvedConfig, options: NliteOptions) {
     /* @vite-ignore */ pathToFileURL(entryPath).href
   );
 
-  if (!entry.collectPrerenderPaths || !entry.handlePrerender) {
-    return;
-  }
-
   const staticPaths = normalizePaths(await entry.collectPrerenderPaths());
   const outDir = path.resolve(config.environments.client.build.outDir);
-  const worker = createPrerenderWorker();
 
-  try {
-    for (const { path: routePath, forcePrerender } of staticPaths) {
-      const result = await worker.renderRoute({
-        entryPath,
-        routePath,
-        forcePrerender,
-      });
+  for (const { path: routePath, forcePrerender } of staticPaths) {
+    const result = await entry.handlePrerender(new Request(new URL(routePath, PRERENDER_ORIGIN)), {
+      enablePartialRender: options.enablePartialRender,
+      forcePrerender,
+      onDynamicUsage() {},
+    });
 
-      if (result.skip) continue;
+    if (result.skip) continue;
 
-      await Promise.all([
-        writeBytesToFile(path.join(outDir, normalizeHtmlFilePath(routePath)), result.stream),
-        writeBytesToFile(path.join(outDir, normalizeRscFilePath(routePath)), result.rsc),
-      ]);
-    }
+    await Promise.all([
+      writeToFile(path.join(outDir, normalizeHtmlFilePath(routePath)), result.stream),
+      writeToFile(path.join(outDir, normalizeRscFilePath(routePath)), result.rsc),
+      result.postponed
+        ? writeToFile(
+            path.join(outDir, normalizePostponedFilePath(routePath)),
+            JSON.stringify(result.postponed),
+          )
+        : Promise.resolve(),
+    ]);
+  }
 
-    // write global _not-found
-    const notFoundResult = await worker.renderNotFound({ entryPath });
-    if (!notFoundResult.skip) {
-      await Promise.all([
-        writeBytesToFile(path.join(outDir, NOT_FOUND_HTML_FILE), notFoundResult.stream),
-        writeBytesToFile(path.join(outDir, NOT_FOUND_RSC_FILE), notFoundResult.rsc),
-      ]);
-    }
-  } finally {
-    worker.end();
+  // write global _not-found
+  const request = new Request(new URL(NOT_FOUND_ROUTE_PATH, PRERENDER_ORIGIN));
+  const notFoundResult = await entry.handleGlobalNotFoundPrerender(request, {
+    onDynamicUsage() {
+      process.send?.({ type: "dynamicUsage" });
+    },
+  });
+
+  if (!notFoundResult.skip) {
+    await Promise.all([
+      writeToFile(path.join(outDir, NOT_FOUND_HTML_FILE), notFoundResult.stream!),
+      writeToFile(path.join(outDir, NOT_FOUND_RSC_FILE), notFoundResult.rsc!),
+    ]);
   }
 
   await writeAssetHeaders(outDir, resolveStaleTimes(options.staleTimes));
@@ -141,9 +155,16 @@ function normalizePaths(paths: PrerenderPath[]) {
   return [...byPath.values()].sort((left, right) => left.path.localeCompare(right.path));
 }
 
-async function writeBytesToFile(filePath: string, bytes: number[]) {
+async function writeToFile(
+  filePath: string,
+  data: Uint8Array | string | ReadableStream<Uint8Array>,
+) {
   await mkdir(path.dirname(filePath), { recursive: true });
-  await writeFile(filePath, Uint8Array.from(bytes));
+  const payload =
+    typeof data === "string" || data instanceof Uint8Array || data instanceof ReadableStream
+      ? data
+      : Uint8Array.from(data);
+  await writeFile(filePath, payload);
 }
 
 function parseRequestUrl(rawUrl: string | undefined) {

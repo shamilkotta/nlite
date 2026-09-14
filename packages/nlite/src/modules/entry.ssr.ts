@@ -4,34 +4,53 @@ import { renderToReadableStream } from "react-dom/server.edge";
 import { prerender } from "react-dom/static.edge";
 import type { RscPayload } from "../types.js";
 import { Document } from "../utils/elements/document.js";
-import { teeRscStream } from "../utils/stream.js";
+import { suppressStreamClose, teeRscStream } from "../utils/stream.js";
 import { runWithNavigationUrl } from "../internal/navigation-context.js";
 import {
   getURLFromRedirectError,
+  isNliteRouterError,
   isNotFoundError,
   isRedirectError,
 } from "../lib/navigation/errors.js";
+import { PostponedState } from "react-dom/static";
+import { DynamicPrerenderUsageError } from "../internal/request-context.js";
 
-export async function renderHtml(rscStream: ReadableStream, _options: { ssg: boolean; url: URL }) {
+export async function renderHtml(
+  rscStream: ReadableStream,
+  _options: { ssg: boolean; url: URL; abort?: boolean },
+) {
   const [rscStream1, rscStream2] = await teeRscStream(rscStream);
-  let payload: Promise<RscPayload>;
+  const held = _options.ssg && _options.abort ? suppressStreamClose(rscStream1) : undefined;
+  const payload = createFromReadableStream<RscPayload>(held?.stream ?? rscStream1);
   function SsrRoot() {
-    payload ??= createFromReadableStream<RscPayload>(rscStream1);
     const { root, metadata } = React.use(payload);
     return createElement(Document, { metadata, children: root });
   }
   const bootstrapScriptContent = await import.meta.viteRsc.loadBootstrapScriptContent("index");
 
   let htmlStream: ReadableStream<Uint8Array>;
+  let postponed: PostponedState | null = null;
   let status: number | undefined;
   if (_options?.ssg) {
+    const controller = new AbortController();
     try {
-      const prerenderResult = await runWithNavigationUrl(_options.url, () =>
-        prerender(createElement(SsrRoot), {
+      const prerenderResult = await runWithNavigationUrl(_options.url, () => {
+        const pending = prerender(createElement(SsrRoot), {
           bootstrapScriptContent,
           onError: reportRenderError,
-        }),
-      );
+          signal: controller.signal,
+        });
+
+        if (_options.abort) {
+          setTimeout(() => {
+            if (!controller.signal.aborted) {
+              controller.abort(new DynamicPrerenderUsageError());
+            }
+          }, 0);
+        }
+        return pending;
+      });
+      postponed = prerenderResult.postponed;
       htmlStream = prerenderResult.prelude;
     } catch (error) {
       if (isRedirectError(error)) {
@@ -51,6 +70,8 @@ export async function renderHtml(rscStream: ReadableStream, _options: { ssg: boo
       } else {
         throw error;
       }
+    } finally {
+      held?.release();
     }
   } else {
     try {
@@ -98,11 +119,11 @@ export async function renderHtml(rscStream: ReadableStream, _options: { ssg: boo
 
   let responseStream: ReadableStream<Uint8Array> = htmlStream;
   responseStream = responseStream.pipeThrough(injectRSCPayload(rscStream2));
-  return { stream: responseStream, status };
+  return { stream: responseStream, status, postponed };
 }
 
 function reportRenderError(error: unknown) {
-  if (!isRedirectError(error) && !isNotFoundError(error)) {
+  if (!isNliteRouterError(error) && !DynamicPrerenderUsageError.isInstance(error)) {
     console.error(error);
   }
 }
@@ -163,6 +184,22 @@ function injectRSCPayload(rscStream: ReadableStream<Uint8Array>) {
     timeout = null;
   }
 
+  async function startRSC(controller: TransformStreamDefaultController<Uint8Array>) {
+    if (startedRSC) {
+      await flightDataPromise;
+      return;
+    }
+
+    startedRSC = true;
+    try {
+      await writeRSCStream(rscStream, controller);
+    } catch (error) {
+      controller.error(error);
+    } finally {
+      resolveFlightDataPromise();
+    }
+  }
+
   return new TransformStream<Uint8Array, Uint8Array>({
     transform(chunk, controller) {
       buffered.push(chunk);
@@ -179,20 +216,16 @@ function injectRSCPayload(rscStream: ReadableStream<Uint8Array>) {
           return;
         }
 
-        if (!startedRSC) {
-          startedRSC = true;
-          writeRSCStream(rscStream, controller)
-            .catch((error) => controller.error(error))
-            .then(resolveFlightDataPromise);
-        }
+        void startRSC(controller);
       }, 0);
     },
     async flush(controller) {
-      await flightDataPromise;
       if (timeout) {
         clearTimeout(timeout);
+        timeout = null;
         flushBufferedChunks(controller);
       }
+      await startRSC(controller);
       controller.enqueue(encoder.encode(trailer));
     },
   });
