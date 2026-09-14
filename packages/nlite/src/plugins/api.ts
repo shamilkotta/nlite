@@ -31,7 +31,7 @@ export function api(options: NliteOptions = {}): PluginOption[] {
             build: {
               outDir: ".nlite/server/api",
               copyPublicDir: false,
-              rollupOptions: {
+              rolldownOptions: {
                 input: {
                   index: VIRTUAL_API_MANIFEST_ID,
                 },
