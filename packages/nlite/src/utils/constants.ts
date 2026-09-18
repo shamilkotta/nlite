@@ -9,6 +9,7 @@ export const NOT_FOUND_ROUTE_PATH = "/_not-found";
 export const STALE_TIME_HEADER = "x-nlite-staletime";
 export const RESPONSE_STATUS_HEADER = "x-nlite-status";
 export const RSC_POSTFIX = ".rsc";
+export const META_POSTFIX = ".meta";
 
 const DEFAULT_STALE_TIMES = {
   static: 300,

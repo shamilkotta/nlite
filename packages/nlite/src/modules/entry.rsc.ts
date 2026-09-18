@@ -9,12 +9,12 @@ import {
   matchRoute,
   resolveGlobalNotFoundMetadata,
 } from "../runtime.js";
+import { DynamicPrerenderUsageError, runWithRequestContext } from "../internal/request-context.js";
 import {
-  DynamicPrerenderUsageError,
-  isContextError,
-  runWithRequestContext,
-  withTrackedFetch,
-} from "../internal/request-context.js";
+  CacheSignal,
+  PrerenderCache,
+  type SerializedPrerenderCache,
+} from "../internal/prerender-cache.js";
 import { isNliteRouterError } from "../lib/navigation/errors.js";
 import type { RscPayload, NliteHandlerEnv } from "../types.js";
 import {
@@ -24,14 +24,16 @@ import {
 } from "../utils/constants.js";
 import { tryCatch } from "../utils/index.js";
 import { teeRscStream } from "../utils/stream.js";
+import { runInSequentialTasks } from "../utils/scheduler.js";
 import { resolveRouteMetadata } from "../utils/metadata/index.js";
+import { normalizeMetaFilePath } from "../utils/path.js";
 
 function onRscError(error: unknown) {
   if (isNliteRouterError(error)) {
     return error.digest;
   }
 
-  if (isContextError(error)) {
+  if (DynamicPrerenderUsageError.isInstance(error)) {
     return;
   }
 
@@ -179,6 +181,7 @@ export async function collectPrerenderPaths() {
 export async function handlePrerender(
   request: Request,
   options: {
+    enablePartialRender?: boolean;
     forcePrerender?: boolean;
     onDynamicUsage?: () => void;
   },
@@ -203,92 +206,182 @@ export async function handlePrerender(
   return initialResult;
 }
 
+type PrerenderResult =
+  | {
+      skip: true;
+    }
+  | (Awaited<ReturnType<typeof finalizePrerenderResult>> & {
+      cache?: SerializedPrerenderCache;
+      skip: false;
+    });
+
 async function prerenderRoute(
   match: NonNullable<ReturnType<typeof matchRoute>>,
   renderRequest: ReturnType<typeof parseRenderRequest>,
   request: Request,
   options: {
+    enablePartialRender?: boolean;
     forcePrerender?: boolean;
     onDynamicUsage?: () => void;
   },
-) {
-  const controller = new AbortController();
+): Promise<PrerenderResult> {
   const dynamicUsage = new DynamicPrerenderUsageError();
   const { route, params } = match;
-  const prerenderResult = await runWithRequestContext(
-    request,
-    () =>
-      withTrackedFetch(async () => {
+
+  const allowPartialShell = Boolean(options.enablePartialRender) && !options.forcePrerender;
+  const cache = new PrerenderCache();
+
+  if (allowPartialShell) {
+    const cacheSignal = new CacheSignal();
+    const prospectiveController = new AbortController();
+    // TODO: shouldn't be this also on another worker?
+    const pendingProspectiveRender = runWithRequestContext(
+      request,
+      async () => {
         const metadata = await resolveRouteMetadata(route, params, renderRequest.url.searchParams);
         const app = createRouteElement(route, params, renderRequest.url.searchParams);
         return prerender<RscPayload>({ root: app, metadata }, createClientManifest(), {
+          signal: prospectiveController.signal,
+          onError: onRscError,
+        });
+      },
+      {
+        cache,
+        cacheSignal,
+        searchParams: renderRequest.url.searchParams,
+        signal: prospectiveController.signal,
+        deferDynamic: true,
+      },
+    );
+
+    await cacheSignal.ready();
+    prospectiveController.abort(dynamicUsage);
+
+    const [, prospectiveError] = await tryCatch(pendingProspectiveRender);
+    if (prospectiveError && !DynamicPrerenderUsageError.isInstance(prospectiveError)) {
+      throw prospectiveError;
+    }
+  }
+
+  const controller = new AbortController();
+  let didAbortFlight = false;
+
+  const prerenderResult = await runWithRequestContext(
+    request,
+    async () => {
+      const metadata = await resolveRouteMetadata(route, params, renderRequest.url.searchParams);
+      const app = createRouteElement(route, params, renderRequest.url.searchParams);
+      const renderFlight = () =>
+        prerender<RscPayload>({ root: app, metadata }, createClientManifest(), {
           signal: controller.signal,
           onError: onRscError,
         });
-      }),
+
+      if (!allowPartialShell) return renderFlight();
+
+      let flightPending = true;
+      return runInSequentialTasks(
+        () => {
+          const pending = renderFlight();
+          void pending.then(
+            () => {
+              flightPending = false;
+            },
+            () => {
+              flightPending = false;
+            },
+          );
+          return pending;
+        },
+        () => {
+          if (flightPending && !controller.signal.aborted) {
+            didAbortFlight = true;
+            controller.abort(dynamicUsage);
+          }
+        },
+      );
+    },
     {
+      cache,
       searchParams: renderRequest.url.searchParams,
+      signal: controller.signal,
+      deferDynamic: allowPartialShell,
       onDynamicUsage() {
-        if (!options.forcePrerender) {
-          options.onDynamicUsage?.();
-          controller.abort(dynamicUsage);
-        }
+        if (options.forcePrerender) return;
+        options.onDynamicUsage?.();
+        if (!allowPartialShell) controller.abort(dynamicUsage);
       },
     },
   );
 
-  if (controller.signal.aborted && controller.signal.reason instanceof DynamicPrerenderUsageError) {
-    return { stream: null, rsc: null, skip: true };
+  if (
+    controller.signal.aborted &&
+    DynamicPrerenderUsageError.isInstance(controller.signal.reason) &&
+    !options.enablePartialRender
+  ) {
+    return { skip: true };
   }
 
   if (!prerenderResult?.prelude) {
-    return { stream: null, rsc: null, skip: true };
+    return { skip: true };
   }
 
-  return finalizePrerenderResult(prerenderResult.prelude, renderRequest.url);
+  const abort = allowPartialShell && didAbortFlight;
+  const result = await finalizePrerenderResult(prerenderResult.prelude, renderRequest.url, {
+    abort,
+  });
+
+  return { ...result, cache: await cache.serialize(), skip: false };
 }
 
-async function finalizePrerenderResult(rscStream: ReadableStream, url: URL) {
+async function finalizePrerenderResult(
+  rscStream: ReadableStream,
+  url: URL,
+  options: { abort?: boolean } = {},
+) {
   const ssrEntry = await import.meta.viteRsc.loadModule<typeof import("./entry.ssr.ts")>(
     "ssr",
     "index",
   );
   const [rscStream1, rscStream2] = await teeRscStream(rscStream);
-  const { stream: htmlStream } = await ssrEntry.renderHtml(rscStream1, { ssg: true, url });
-  return { stream: htmlStream, rsc: rscStream2, skip: false };
+  const { stream: htmlStream, postponed } = await ssrEntry.renderHtml(rscStream1, {
+    ssg: true,
+    url,
+    abort: options.abort,
+  });
+  return { stream: htmlStream, rsc: rscStream2, postponed };
 }
 
+// TODO: revisit here
 export async function handleGlobalNotFoundPrerender(
   request: Request,
   options: {
     onDynamicUsage?: () => void;
   },
-) {
+): Promise<PrerenderResult> {
   const renderRequest = parseRenderRequest(request);
   const controller = new AbortController();
   const dynamicUsage = new DynamicPrerenderUsageError();
   const prerenderResult = await runWithRequestContext(
     request,
-    () =>
-      withTrackedFetch(async () => {
-        const metadata = await resolveGlobalNotFoundMetadata(
-          routes,
-          renderRequest.url.searchParams,
-        );
-        const app = createGlobalNotFoundElement(routes, renderRequest.url.searchParams);
+    async () => {
+      const metadata = await resolveGlobalNotFoundMetadata(routes, renderRequest.url.searchParams);
+      const app = createGlobalNotFoundElement(routes, renderRequest.url.searchParams);
 
-        return prerender<RscPayload>({ root: app, metadata }, createClientManifest(), {
-          onError: (error: unknown) => {
-            if (error instanceof DynamicPrerenderUsageError) {
-              return;
-            }
+      return prerender<RscPayload>({ root: app, metadata }, createClientManifest(), {
+        signal: controller.signal,
+        onError: (error: unknown) => {
+          if (error instanceof DynamicPrerenderUsageError) {
+            return;
+          }
 
-            throw error;
-          },
-        });
-      }),
+          throw error;
+        },
+      });
+    },
     {
       searchParams: renderRequest.url.searchParams,
+      signal: controller.signal,
       onDynamicUsage() {
         controller.abort(dynamicUsage);
         options.onDynamicUsage?.();
@@ -296,10 +389,15 @@ export async function handleGlobalNotFoundPrerender(
     },
   );
 
-  if (!prerenderResult?.prelude) {
-    return { stream: null, rsc: null, skip: true };
+  if (controller.signal.aborted && controller.signal.reason instanceof DynamicPrerenderUsageError) {
+    return { skip: true };
   }
-  return finalizePrerenderResult(prerenderResult.prelude, renderRequest.url);
+
+  if (!prerenderResult?.prelude) {
+    return { skip: true };
+  }
+  const result = await finalizePrerenderResult(prerenderResult.prelude, renderRequest.url);
+  return { ...result, skip: false };
 }
 
 function isDocumentRenderRequest(request: Request, pathname: string) {

@@ -7,7 +7,12 @@ import type { ConfigEnv, Plugin, ResolvedConfig, UserConfig } from "vite";
 import { NOT_FOUND_HTML_FILE, NOT_FOUND_RSC_FILE, resolveStaleTimes } from "../utils/constants.js";
 import { createPreviewHeadersMiddleware, writeAssetHeaders } from "../utils/headers.js";
 import type { NliteOptions, PrerenderPath } from "../types.js";
-import { normalizeHtmlFilePath, normalizeRoutePath, normalizeRscFilePath } from "../utils/path.js";
+import {
+  normalizeHtmlFilePath,
+  normalizeMetaFilePath,
+  normalizeRoutePath,
+  normalizeRscFilePath,
+} from "../utils/path.js";
 import { createWorker, type WorkerProxy } from "../lib/worker/index.js";
 import type { PrerenderWorker } from "../internal/prerender-worker.js";
 
@@ -86,17 +91,15 @@ async function renderStatic(config: ResolvedConfig, options: NliteOptions) {
     /* @vite-ignore */ pathToFileURL(entryPath).href
   );
 
-  if (!entry.collectPrerenderPaths || !entry.handlePrerender) {
-    return;
-  }
-
   const staticPaths = normalizePaths(await entry.collectPrerenderPaths());
+
   const outDir = path.resolve(config.environments.client.build.outDir);
   const worker = createPrerenderWorker();
 
   try {
     for (const { path: routePath, forcePrerender } of staticPaths) {
       const result = await worker.renderRoute({
+        enablePartialRender: options.enablePartialRender,
         entryPath,
         routePath,
         forcePrerender,
@@ -105,17 +108,27 @@ async function renderStatic(config: ResolvedConfig, options: NliteOptions) {
       if (result.skip) continue;
 
       await Promise.all([
-        writeBytesToFile(path.join(outDir, normalizeHtmlFilePath(routePath)), result.stream),
-        writeBytesToFile(path.join(outDir, normalizeRscFilePath(routePath)), result.rsc),
+        writeToFile(path.join(outDir, normalizeHtmlFilePath(routePath)), result.stream),
+        writeToFile(path.join(outDir, normalizeRscFilePath(routePath)), result.rsc),
+        result.postponed
+          ? writeToFile(
+              path.join(outDir, normalizeMetaFilePath(routePath)),
+              JSON.stringify({
+                postponed: result.postponed,
+                cache: result.cache,
+              }),
+            )
+          : Promise.resolve(),
       ]);
     }
 
-    // write global _not-found
+    // TODO: revisit here
     const notFoundResult = await worker.renderNotFound({ entryPath });
+
     if (!notFoundResult.skip) {
       await Promise.all([
-        writeBytesToFile(path.join(outDir, NOT_FOUND_HTML_FILE), notFoundResult.stream),
-        writeBytesToFile(path.join(outDir, NOT_FOUND_RSC_FILE), notFoundResult.rsc),
+        writeToFile(path.join(outDir, NOT_FOUND_HTML_FILE), notFoundResult.stream),
+        writeToFile(path.join(outDir, NOT_FOUND_RSC_FILE), notFoundResult.rsc),
       ]);
     }
   } finally {
@@ -141,9 +154,13 @@ function normalizePaths(paths: PrerenderPath[]) {
   return [...byPath.values()].sort((left, right) => left.path.localeCompare(right.path));
 }
 
-async function writeBytesToFile(filePath: string, bytes: number[]) {
+async function writeToFile(
+  filePath: string,
+  data: Uint8Array | number[] | string | ReadableStream<Uint8Array>,
+) {
   await mkdir(path.dirname(filePath), { recursive: true });
-  await writeFile(filePath, Uint8Array.from(bytes));
+  const payload = Array.isArray(data) ? Uint8Array.from(data) : data;
+  await writeFile(filePath, payload);
 }
 
 function parseRequestUrl(rawUrl: string | undefined) {
