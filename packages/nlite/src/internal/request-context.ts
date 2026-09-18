@@ -1,4 +1,5 @@
 import { AsyncLocalStorage } from "node:async_hooks";
+import { CacheSignal, PrerenderCache } from "./prerender-cache.js";
 
 type DynamicReason = "headers" | "cookies" | "searchParams" | "fetch";
 
@@ -7,6 +8,9 @@ interface RequestContext {
   searchParams: URLSearchParams;
   signal?: AbortSignal;
   onDynamicUsage?: (reason: DynamicReason) => void;
+  deferDynamic?: boolean;
+  cache: PrerenderCache;
+  cacheSignal?: CacheSignal;
 }
 
 export class DynamicPrerenderUsageError extends Error {
@@ -32,27 +36,38 @@ export function runWithRequestContext<T>(
     searchParams?: URLSearchParams;
     signal?: AbortSignal;
     onDynamicUsage?: (reason: DynamicReason) => void;
+    deferDynamic?: boolean;
+    cache?: PrerenderCache;
+    cacheSignal?: CacheSignal;
   } = {},
 ) {
   const url = new URL(request.url);
+  const store: RequestContext = {
+    request,
+    searchParams: options.searchParams ?? url.searchParams,
+    signal: options.signal,
+    onDynamicUsage: options.onDynamicUsage,
+    deferDynamic: options.deferDynamic,
+    cache: options.cache ?? new PrerenderCache(),
+    cacheSignal: options.cacheSignal,
+  };
 
-  return requestContext.run(
-    {
-      request,
-      searchParams: options.searchParams ?? url.searchParams,
-      signal: options.signal,
-      onDynamicUsage: options.onDynamicUsage,
-    },
-    callback,
-  );
+  return requestContext.run(store, () => withContextFetch(callback, store));
 }
 
-export function markDynamicUsage(reason: DynamicReason): Promise<void> {
+function markDynamicUsage(reason: DynamicReason): Promise<void> {
   const store = requestContext.getStore();
   store?.onDynamicUsage?.(reason);
 
-  if (store?.signal?.aborted) {
-    return new Promise(() => {});
+  if (store?.deferDynamic || store?.signal?.aborted) {
+    return new Promise((_, reject) => {
+      if (store.signal?.aborted) {
+        reject(store.signal.reason);
+        return;
+      }
+
+      store.signal?.addEventListener("abort", () => reject(store.signal?.reason), { once: true });
+    });
   }
 
   return Promise.resolve();
@@ -88,13 +103,23 @@ export function trackSearchParams<T extends URLSearchParams>(value: T): Promise<
   };
 }
 
-export function withTrackedFetch<T>(callback: () => T) {
+export function createCachedFunction<Args extends readonly unknown[], Result>(
+  functionId: string,
+  fn: (...args: Args) => Result,
+) {
+  return (...args: Args) => {
+    const context = getRequestContext("cache");
+    return context.cache.data(functionId, args, () => fn(...args), context.cacheSignal);
+  };
+}
+
+function withContextFetch<T>(callback: () => T, context: RequestContext) {
   const originalFetch = globalThis.fetch;
   let restoreImmediately = true;
 
   globalThis.fetch = ((input: RequestInfo | URL, init?: RequestInit) => {
     if (!isDynamicFetch(input, init)) {
-      return originalFetch(input, init);
+      return context.cache.fetch(input, init, originalFetch, context.cacheSignal);
     }
 
     return markDynamicUsage("fetch").then(() => originalFetch(input, init));

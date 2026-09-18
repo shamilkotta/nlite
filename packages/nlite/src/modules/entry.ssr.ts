@@ -5,6 +5,7 @@ import { prerender } from "react-dom/static.edge";
 import type { RscPayload } from "../types.js";
 import { Document } from "../utils/elements/document.js";
 import { suppressStreamClose, teeRscStream } from "../utils/stream.js";
+import { runInSequentialTasks } from "../utils/scheduler.js";
 import { runWithNavigationUrl } from "../internal/navigation-context.js";
 import {
   getURLFromRedirectError,
@@ -35,20 +36,27 @@ export async function renderHtml(
     const controller = new AbortController();
     try {
       const prerenderResult = await runWithNavigationUrl(_options.url, () => {
-        const pending = prerender(createElement(SsrRoot), {
-          bootstrapScriptContent,
-          onError: reportRenderError,
-          signal: controller.signal,
-        });
+        if (!_options.abort) {
+          return prerender(createElement(SsrRoot), {
+            bootstrapScriptContent,
+            onError: reportRenderError,
+            signal: controller.signal,
+          });
+        }
 
-        if (_options.abort) {
-          setTimeout(() => {
+        return runInSequentialTasks(
+          () =>
+            prerender(createElement(SsrRoot), {
+              bootstrapScriptContent,
+              onError: reportRenderError,
+              signal: controller.signal,
+            }),
+          () => {
             if (!controller.signal.aborted) {
               controller.abort(new DynamicPrerenderUsageError());
             }
-          }, 0);
-        }
-        return pending;
+          },
+        );
       });
       postponed = prerenderResult.postponed;
       htmlStream = prerenderResult.prelude;
@@ -92,6 +100,7 @@ export async function renderHtml(
           }),
         ]);
       } else if (isNotFoundError(error)) {
+        status = 404;
         htmlStream = await renderNavigationShell(bootstrapScriptContent, [
           createElement("title", null, "404: This page could not be found"),
           createElement("meta", { key: "robots", name: "robots", content: "noindex" }),
