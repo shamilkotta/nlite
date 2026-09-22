@@ -1,6 +1,6 @@
 import { createFromReadableStream } from "@vitejs/plugin-rsc/ssr";
 import React, { createElement } from "react";
-import { renderToReadableStream } from "react-dom/server.edge";
+import { renderToReadableStream, resume } from "react-dom/server.edge";
 import { prerender } from "react-dom/static.edge";
 import type { RscPayload } from "../types.js";
 import { Document } from "../utils/elements/document.js";
@@ -15,18 +15,45 @@ import {
 } from "../lib/navigation/errors.js";
 import { PostponedState } from "react-dom/static";
 import { DynamicPrerenderUsageError } from "../internal/request-context.js";
+import { tryCatch } from "../utils/index.js";
+
+export async function resumeHtml(
+  rscStream: ReadableStream,
+  postponed: PostponedState,
+  options: { url: URL },
+) {
+  const [rscForSsr, rscForBrowser] = await teeRscStream(rscStream);
+  const bootstrapScriptContent = await import.meta.viteRsc.loadBootstrapScriptContent("index");
+  let htmlStream: ReadableStream<Uint8Array>;
+  let status: number | undefined;
+
+  const resumeFn = runWithNavigationUrl(options.url, () =>
+    resume(createSsrRoot(rscForSsr), postponed, {
+      onError: reportRenderError,
+    }),
+  );
+
+  const [resp, error] = await tryCatch(resumeFn);
+  if (error) {
+    ({ stream: htmlStream, status } = await renderError(error, bootstrapScriptContent));
+  } else {
+    htmlStream = resp;
+  }
+
+  htmlStream = htmlStream.pipeThrough(injectRSCPayload(rscForBrowser));
+  return { stream: htmlStream, status };
+}
 
 export async function renderHtml(
   rscStream: ReadableStream,
   _options: { ssg: boolean; url: URL; abort?: boolean },
 ) {
-  const [rscStream1, rscStream2] = await teeRscStream(rscStream);
-  const held = _options.ssg && _options.abort ? suppressStreamClose(rscStream1) : undefined;
-  const payload = createFromReadableStream<RscPayload>(held?.stream ?? rscStream1);
-  function SsrRoot() {
-    const { root, metadata } = React.use(payload);
-    return createElement(Document, { metadata, children: root });
-  }
+  const injectFlight = !(_options.ssg && _options.abort);
+  const [rscForSsr, rscForBrowser] = injectFlight
+    ? await teeRscStream(rscStream)
+    : [rscStream, undefined];
+  const held = _options.ssg && _options.abort ? suppressStreamClose(rscForSsr) : undefined;
+  const ssrRoot = createSsrRoot(held?.stream ?? rscForSsr);
   const bootstrapScriptContent = await import.meta.viteRsc.loadBootstrapScriptContent("index");
 
   let htmlStream: ReadableStream<Uint8Array>;
@@ -37,7 +64,7 @@ export async function renderHtml(
     try {
       const prerenderResult = await runWithNavigationUrl(_options.url, () => {
         if (!_options.abort) {
-          return prerender(createElement(SsrRoot), {
+          return prerender(ssrRoot, {
             bootstrapScriptContent,
             onError: reportRenderError,
             signal: controller.signal,
@@ -46,7 +73,7 @@ export async function renderHtml(
 
         return runInSequentialTasks(
           () =>
-            prerender(createElement(SsrRoot), {
+            prerender(ssrRoot, {
               bootstrapScriptContent,
               onError: reportRenderError,
               signal: controller.signal,
@@ -84,51 +111,71 @@ export async function renderHtml(
   } else {
     try {
       htmlStream = await runWithNavigationUrl(_options.url, () =>
-        renderToReadableStream(createElement(SsrRoot), {
+        renderToReadableStream(ssrRoot, {
           onError: reportRenderError,
           bootstrapScriptContent,
         }),
       );
     } catch (error) {
-      if (isRedirectError(error)) {
-        htmlStream = await renderNavigationShell(bootstrapScriptContent, [
-          createElement("title", null, "Redirecting..."),
-          createElement("meta", {
-            key: "redirect",
-            httpEquiv: "refresh",
-            content: `0;url=${getURLFromRedirectError(error)}`,
-          }),
-        ]);
-      } else if (isNotFoundError(error)) {
-        status = 404;
-        htmlStream = await renderNavigationShell(bootstrapScriptContent, [
-          createElement("title", null, "404: This page could not be found"),
-          createElement("meta", { key: "robots", name: "robots", content: "noindex" }),
-        ]);
-      } else {
-        console.error("[nlite] SSR render failed", error);
-        status = 500;
-        htmlStream = await renderToReadableStream(
-          createElement(
-            "html",
-            null,
-            createElement(
-              "body",
-              null,
-              createElement("noscript", null, "Internal Server Error: SSR failed"),
-            ),
-          ),
-          {
-            bootstrapScriptContent: `self.__NO_HYDRATE=1;` + bootstrapScriptContent,
-          },
-        );
-      }
+      ({ stream: htmlStream, status } = await renderError(error, bootstrapScriptContent));
     }
   }
 
   let responseStream: ReadableStream<Uint8Array> = htmlStream;
-  responseStream = responseStream.pipeThrough(injectRSCPayload(rscStream2));
+  if (rscForBrowser) {
+    responseStream = responseStream.pipeThrough(injectRSCPayload(rscForBrowser));
+  }
   return { stream: responseStream, status, postponed };
+}
+
+async function renderError(error: unknown, bootstrapScriptContent: string) {
+  let htmlStream: ReadableStream<Uint8Array>;
+  let status: number | undefined;
+  if (isRedirectError(error)) {
+    htmlStream = await renderNavigationShell(bootstrapScriptContent, [
+      createElement("title", null, "Redirecting..."),
+      createElement("meta", {
+        key: "redirect",
+        httpEquiv: "refresh",
+        content: `0;url=${getURLFromRedirectError(error)}`,
+      }),
+    ]);
+  } else if (isNotFoundError(error)) {
+    status = 404;
+    htmlStream = await renderNavigationShell(bootstrapScriptContent, [
+      createElement("title", null, "404: This page could not be found"),
+      createElement("meta", { key: "robots", name: "robots", content: "noindex" }),
+    ]);
+  } else {
+    console.error("[nlite] SSR render failed", error);
+    status = 500;
+    htmlStream = await renderToReadableStream(
+      createElement(
+        "html",
+        null,
+        createElement(
+          "body",
+          null,
+          createElement("noscript", null, "Internal Server Error: SSR failed"),
+        ),
+      ),
+      {
+        bootstrapScriptContent: `self.__NO_HYDRATE=1;` + bootstrapScriptContent,
+      },
+    );
+  }
+
+  return { stream: htmlStream, status };
+}
+
+function createSsrRoot(rscStream: ReadableStream) {
+  const payload = createFromReadableStream<RscPayload>(rscStream);
+  function SsrRoot() {
+    const { root, metadata } = React.use(payload);
+    return createElement(Document, { metadata, children: root });
+  }
+
+  return createElement(SsrRoot);
 }
 
 function reportRenderError(error: unknown) {

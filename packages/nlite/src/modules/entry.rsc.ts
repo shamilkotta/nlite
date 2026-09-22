@@ -16,17 +16,18 @@ import {
   type SerializedPrerenderCache,
 } from "../internal/prerender-cache.js";
 import { isNliteRouterError } from "../lib/navigation/errors.js";
-import type { RscPayload, NliteHandlerEnv } from "../types.js";
+import type { RscPayload, NliteHandlerEnv, PrerenderMeta } from "../types.js";
+import type { PostponedState } from "react-dom/static";
 import {
   NOT_FOUND_ROUTE_PATH,
   RESPONSE_STATUS_HEADER,
+  RESUME_HEADER,
   STALE_TIME_HEADER,
 } from "../utils/constants.js";
 import { tryCatch } from "../utils/index.js";
 import { teeRscStream } from "../utils/stream.js";
 import { runInSequentialTasks } from "../utils/scheduler.js";
 import { resolveRouteMetadata } from "../utils/metadata/index.js";
-import { normalizeMetaFilePath } from "../utils/path.js";
 
 function onRscError(error: unknown) {
   if (isNliteRouterError(error)) {
@@ -60,56 +61,12 @@ export async function handler(request: Request, env?: NliteHandlerEnv) {
 
   const match = matchRoute(routes, renderRequest.pathname);
 
-  if (!match) {
-    if (!renderRequest.isRsc && !isDocumentRenderRequest(request, pathname)) {
-      return new Response(null, { status: 404 });
-    }
+  if (!match) return notFoundHandler(request, env);
 
-    const notFoundUrl = new URL(
-      NOT_FOUND_ROUTE_PATH + (renderRequest.isRsc ? ".rsc" : ""),
-      request.url,
-    );
-
-    const assetResponse = await env?.ASSETS?.fetch(new Request(notFoundUrl, request));
-    if (assetResponse?.ok) {
-      const headers = new Headers({
-        "content-type": renderRequest.isRsc
-          ? "text/x-component;charset=utf-8"
-          : "text/html;charset=utf-8",
-        [STALE_TIME_HEADER]:
-          assetResponse.headers.get(STALE_TIME_HEADER) ?? String(__NLITE_STALE_TIMES__.dynamic),
-      });
-
-      return new Response(assetResponse.body, {
-        status: 404,
-        headers,
-      });
-    }
-
-    const stream = await runWithRequestContext(
-      request,
-      async () => {
-        const metadata = await resolveGlobalNotFoundMetadata(
-          routes,
-          renderRequest.url.searchParams,
-        );
-        const app = createGlobalNotFoundElement(routes, renderRequest.url.searchParams);
-        return renderToReadableStream<RscPayload>(
-          { root: app, metadata },
-          {
-            onError: (error: unknown) => {
-              throw error;
-            },
-          },
-        );
-      },
-      { searchParams: url.searchParams },
-    );
-
-    return finalizeRenderResponse(stream, {
-      renderRequest,
-      status: 404,
-    });
+  if (isResumeRequest(request)) {
+    const meta = await loadPrerenderMeta(request);
+    if (!meta?.postponed) return new Response(null, { status: 204 });
+    return resumeRenderResponse(request, match, renderRequest, meta as PrerenderMeta);
   }
 
   const stream = await runWithRequestContext(
@@ -125,6 +82,107 @@ export async function handler(request: Request, env?: NliteHandlerEnv) {
   return finalizeRenderResponse(stream, {
     renderRequest,
     status: 200,
+  });
+}
+
+async function notFoundHandler(request: Request, env?: NliteHandlerEnv) {
+  const url = new URL(request.url);
+  const pathname = url.pathname;
+  const renderRequest = parseRenderRequest(request, pathname);
+  if (!renderRequest.isRsc && !isDocumentRenderRequest(request, pathname)) {
+    return new Response(null, { status: 404 });
+  }
+
+  const notFoundUrl = new URL(
+    NOT_FOUND_ROUTE_PATH + (renderRequest.isRsc ? ".rsc" : ""),
+    request.url,
+  );
+
+  const assetResponse = await env?.ASSETS?.fetch(new Request(notFoundUrl, request));
+  if (assetResponse?.ok) {
+    const headers = new Headers({
+      "content-type": renderRequest.isRsc
+        ? "text/x-component;charset=utf-8"
+        : "text/html;charset=utf-8",
+      [STALE_TIME_HEADER]:
+        assetResponse.headers.get(STALE_TIME_HEADER) ?? String(__NLITE_STALE_TIMES__.dynamic),
+    });
+
+    return new Response(assetResponse.body, {
+      status: 404,
+      headers,
+    });
+  }
+
+  const stream = await runWithRequestContext(
+    request,
+    async () => {
+      const metadata = await resolveGlobalNotFoundMetadata(routes, renderRequest.url.searchParams);
+      const app = createGlobalNotFoundElement(routes, renderRequest.url.searchParams);
+      return renderToReadableStream<RscPayload>(
+        { root: app, metadata },
+        {
+          onError: (error: unknown) => {
+            throw error;
+          },
+        },
+      );
+    },
+    { searchParams: url.searchParams },
+  );
+
+  return finalizeRenderResponse(stream, {
+    renderRequest,
+    status: 404,
+  });
+}
+
+async function resumeRenderResponse(
+  request: Request,
+  match: NonNullable<ReturnType<typeof matchRoute>>,
+  renderRequest: ReturnType<typeof parseRenderRequest>,
+  meta: PrerenderMeta,
+) {
+  const url = new URL(request.url);
+  const rscStream = await runWithRequestContext(
+    request,
+    async () => {
+      const metadata = await resolveRouteMetadata(match.route, match.params, url.searchParams);
+      const app = createRouteElement(match.route, match.params, renderRequest.url.searchParams);
+      return renderToReadableStream<RscPayload>({ root: app, metadata }, { onError: onRscError });
+    },
+    { cache: meta.cache, searchParams: renderRequest.url.searchParams },
+  );
+
+  if (renderRequest.isRsc) {
+    return new Response(rscStream, {
+      status: 200,
+      headers: {
+        "content-type": "text/x-component;charset=utf-8",
+        [STALE_TIME_HEADER]: String(__NLITE_STALE_TIMES__.dynamic),
+        [RESPONSE_STATUS_HEADER]: String(200),
+      },
+    });
+  }
+
+  const ssrEntry = await import.meta.viteRsc.loadModule<typeof import("./entry.ssr.ts")>(
+    "ssr",
+    "index",
+  );
+  const { stream: htmlStream, status: renderStatus } = await ssrEntry.resumeHtml(
+    rscStream,
+    meta.postponed,
+    {
+      url: renderRequest.url,
+    },
+  );
+
+  return new Response(htmlStream, {
+    status: renderStatus ?? 200,
+    headers: {
+      "content-type": "text/html;charset=utf-8",
+      [STALE_TIME_HEADER]: String(__NLITE_STALE_TIMES__.dynamic),
+    },
   });
 }
 
@@ -181,7 +239,7 @@ export async function collectPrerenderPaths() {
 export async function handlePrerender(
   request: Request,
   options: {
-    enablePartialRender?: boolean;
+    ppr?: boolean;
     forcePrerender?: boolean;
     onDynamicUsage?: () => void;
   },
@@ -220,7 +278,7 @@ async function prerenderRoute(
   renderRequest: ReturnType<typeof parseRenderRequest>,
   request: Request,
   options: {
-    enablePartialRender?: boolean;
+    ppr?: boolean;
     forcePrerender?: boolean;
     onDynamicUsage?: () => void;
   },
@@ -228,7 +286,7 @@ async function prerenderRoute(
   const dynamicUsage = new DynamicPrerenderUsageError();
   const { route, params } = match;
 
-  const allowPartialShell = Boolean(options.enablePartialRender) && !options.forcePrerender;
+  const allowPartialShell = Boolean(options.ppr) && !options.forcePrerender;
   const cache = new PrerenderCache();
 
   if (allowPartialShell) {
@@ -317,7 +375,7 @@ async function prerenderRoute(
   if (
     controller.signal.aborted &&
     DynamicPrerenderUsageError.isInstance(controller.signal.reason) &&
-    !options.enablePartialRender
+    !options.ppr
   ) {
     return { skip: true };
   }
@@ -428,4 +486,24 @@ function parseRenderRequest(request: Request, pathname = new URL(request.url).pa
     pathname: pagePathname,
     url,
   };
+}
+
+function isResumeRequest(request: Request) {
+  return request.headers.get(RESUME_HEADER) === "1" && request.method === "POST";
+}
+
+async function loadPrerenderMeta(request: Request) {
+  const body = await request.text();
+  try {
+    const meata = JSON.parse(body) as {
+      cache?: SerializedPrerenderCache;
+      postponed?: PostponedState;
+    };
+    return {
+      cache: new PrerenderCache(meata.cache),
+      postponed: meata.postponed,
+    };
+  } catch {
+    return;
+  }
 }

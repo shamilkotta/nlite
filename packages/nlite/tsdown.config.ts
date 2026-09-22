@@ -11,7 +11,7 @@ export default defineConfig((_opt): UserConfig[] => [
       "lib/mdx": "./src/lib/mdx/index.ts",
       config: "./src/config.ts",
       "internal/default-config": "./src/internal/default-config.ts",
-      "internal/request-context": "./src/internal/request-context.ts",
+      "internal/cache-runtime": "./src/internal/cache-runtime.ts",
       "internal/prerender-worker": "./src/internal/prerender-worker.ts",
       runtime: "./src/runtime.tsx",
       "api.runtime": "./src/api.runtime.ts",

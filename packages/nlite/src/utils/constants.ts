@@ -8,6 +8,7 @@ export const NOT_FOUND_ROUTE_PATH = "/_not-found";
 
 export const STALE_TIME_HEADER = "x-nlite-staletime";
 export const RESPONSE_STATUS_HEADER = "x-nlite-status";
+export const RESUME_HEADER = "x-nlite-resume";
 export const RSC_POSTFIX = ".rsc";
 export const META_POSTFIX = ".meta";
 

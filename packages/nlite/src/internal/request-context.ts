@@ -103,14 +103,9 @@ export function trackSearchParams<T extends URLSearchParams>(value: T): Promise<
   };
 }
 
-export function createCachedFunction<Args extends readonly unknown[], Result>(
-  functionId: string,
-  fn: (...args: Args) => Result,
-) {
-  return (...args: Args) => {
-    const context = getRequestContext("cache");
-    return context.cache.data(functionId, args, () => fn(...args), context.cacheSignal);
-  };
+export function getRequestCache() {
+  const context = getRequestContext("cache");
+  return { cache: context.cache, cacheSignal: context.cacheSignal };
 }
 
 function withContextFetch<T>(callback: () => T, context: RequestContext) {

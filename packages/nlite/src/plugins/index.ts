@@ -38,7 +38,7 @@ export function nlite(options: NliteOptions = {}): PluginOption[] {
 
   const __dirname = path.dirname(fileURLToPath(import.meta.url));
   const runtimeId = path.join(__dirname, "runtime.mjs");
-  const cacheRuntimeId = path.join(__dirname, "internal", "request-context.mjs");
+  const cacheRuntimeId = path.join(__dirname, "internal", "cache-runtime.mjs");
 
   const frameworkPlugin: Plugin = {
     name: "nlite",

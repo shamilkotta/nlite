@@ -67,6 +67,19 @@ describe("PrerenderCache", () => {
     expect(restoredValue).toEqual({ enabled: true });
     expect(generate).toHaveBeenCalledTimes(1);
   });
+
+  it("refuses to persist React elements as JSON", async () => {
+    const cache = new PrerenderCache();
+    cache.data("cmp:render", [], () => ({
+      $$typeof: Symbol.for("react.transitional.element"),
+      type: "h1",
+      key: null,
+      ref: null,
+      props: { children: "Hello" },
+    }));
+
+    await expect(cache.serialize()).rejects.toThrow(/React element/);
+  });
 });
 
 describe("request cache context", () => {

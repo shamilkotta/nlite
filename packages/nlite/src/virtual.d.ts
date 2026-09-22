@@ -18,7 +18,7 @@ declare module "virtual:nlite/api" {
 }
 
 declare module "virtual:nlite/cache-runtime" {
-  export { createCachedFunction } from "./internal/request-context.js";
+  export { createCachedFunction } from "./internal/cache-runtime.js";
 }
 
 declare module "virtual:nlite/assets" {

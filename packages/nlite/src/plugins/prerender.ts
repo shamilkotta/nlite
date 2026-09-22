@@ -1,10 +1,17 @@
 import { existsSync } from "node:fs";
-import { mkdir, writeFile } from "node:fs/promises";
+import type { ServerResponse } from "node:http";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import type { ConfigEnv, Plugin, ResolvedConfig, UserConfig } from "vite";
+import type { ConfigEnv, Connect, Plugin, ResolvedConfig, UserConfig } from "vite";
 
-import { NOT_FOUND_HTML_FILE, NOT_FOUND_RSC_FILE, resolveStaleTimes } from "../utils/constants.js";
+import {
+  META_POSTFIX,
+  NOT_FOUND_HTML_FILE,
+  NOT_FOUND_RSC_FILE,
+  RESUME_HEADER,
+  resolveStaleTimes,
+} from "../utils/constants.js";
 import { createPreviewHeadersMiddleware, writeAssetHeaders } from "../utils/headers.js";
 import type { NliteOptions, PrerenderPath } from "../types.js";
 import {
@@ -13,8 +20,10 @@ import {
   normalizeRoutePath,
   normalizeRscFilePath,
 } from "../utils/path.js";
+import { sirv } from "../lib/sirv.js";
 import { createWorker, type WorkerProxy } from "../lib/worker/index.js";
 import type { PrerenderWorker } from "../internal/prerender-worker.js";
+import { tryCatch } from "../utils/index.js";
 
 export function prerender(options: NliteOptions = {}): Plugin {
   return {
@@ -30,22 +39,36 @@ export function prerender(options: NliteOptions = {}): Plugin {
         };
       },
     },
-    configurePreviewServer(server) {
-      const distDir = path.resolve(
-        server.config.root,
-        server.config.environments.client.build.outDir,
-      );
+    async configurePreviewServer(server) {
+      const distDir = path.resolve(server.config.environments.client.build.outDir);
 
       server.middlewares.use(createPreviewHeadersMiddleware(distDir));
       server.middlewares.use((req, _res, next) => {
         const htmlPath = getPreviewHtmlRewrite(req, distDir);
 
         if (htmlPath) {
+          req.originalUrl ??= req.url;
           req.url = htmlPath;
         }
 
         next();
       });
+
+      if (!options.ppr) {
+        return;
+      }
+
+      server.middlewares.use((req, _res, next) => {
+        delete req.headers["accept-encoding"];
+        next();
+      });
+
+      const entryPath = path.join(server.config.environments.rsc.build.outDir, "index.js");
+      const rscEntry: typeof import("../modules/entry.rsc.js") = await import(
+        /* @vite-ignore */ pathToFileURL(entryPath).href
+      );
+
+      server.middlewares.use(createPprResumeMiddleware(distDir, rscEntry.handler));
     },
     buildApp: {
       async handler(builder) {
@@ -99,7 +122,7 @@ async function renderStatic(config: ResolvedConfig, options: NliteOptions) {
   try {
     for (const { path: routePath, forcePrerender } of staticPaths) {
       const result = await worker.renderRoute({
-        enablePartialRender: options.enablePartialRender,
+        ppr: options.ppr,
         entryPath,
         routePath,
         forcePrerender,
@@ -109,16 +132,17 @@ async function renderStatic(config: ResolvedConfig, options: NliteOptions) {
 
       await Promise.all([
         writeToFile(path.join(outDir, normalizeHtmlFilePath(routePath)), result.stream),
-        writeToFile(path.join(outDir, normalizeRscFilePath(routePath)), result.rsc),
-        result.postponed
-          ? writeToFile(
-              path.join(outDir, normalizeMetaFilePath(routePath)),
-              JSON.stringify({
-                postponed: result.postponed,
-                cache: result.cache,
-              }),
-            )
-          : Promise.resolve(),
+        !result.postponed
+          ? writeToFile(path.join(outDir, normalizeRscFilePath(routePath)), result.rsc)
+          : null,
+        writeToFile(
+          path.join(outDir, normalizeMetaFilePath(routePath)),
+          JSON.stringify({
+            postponed: result.postponed ?? undefined,
+            cache: result.cache,
+            renderingMode: result.postponed ? "PARTIALLY_STATIC" : "STATIC",
+          }),
+        ),
       ]);
     }
 
@@ -180,6 +204,169 @@ function parseRequestUrl(rawUrl: string | undefined) {
     return;
   }
 }
+
+function createPprResumeMiddleware(
+  distDir: string,
+  handler: (request: Request) => Promise<Response>,
+) {
+  return async (req: Connect.IncomingMessage, res: ServerResponse, next: () => void) => {
+    if (
+      (req.method !== "GET" && req.method !== "HEAD") ||
+      (!req.url?.endsWith(".rsc") && !req.url?.endsWith(".html"))
+    ) {
+      return next();
+    }
+
+    const meta = await resolveRouteMeta(distDir, req.url);
+    if (!meta?.trim() || JSON.parse(meta).renderingMode !== "PARTIALLY_STATIC") {
+      return next();
+    }
+
+    if (req.url?.endsWith(".html")) {
+      const pendingResumes = new WeakMap<ServerResponse, Promise<Response>>();
+      return sirv(distDir, {
+        etag: true,
+        extensions: ["html"],
+        end: (req) => req.method !== "GET",
+        onFile(req, res) {
+          pendingResumes.set(res, createResumeRequest(req, meta).then(handler));
+        },
+        async onSent(req, res) {
+          if (res.writableEnded) return;
+
+          const response = pendingResumes.get(res) ?? createResumeRequest(req, meta).then(handler);
+          const [resumeResponse, error] = await tryCatch(response);
+
+          pendingResumes.delete(res);
+          if (error) {
+            console.error("[nlite] PPR resume failed", error);
+            if (!res.writableEnded) {
+              res.end();
+            }
+            return;
+          }
+          if (resumeResponse.body) {
+            await writeReadableStreamToNode(resumeResponse.body, res);
+          }
+          if (!res.writableEnded) {
+            res.end();
+          }
+        },
+      })(req, res, next);
+    }
+
+    try {
+      const resumeResponse = await handler(await createResumeRequest(req, meta));
+      res.statusCode = resumeResponse.status;
+      resumeResponse.headers.forEach((value, name) => {
+        if (!HOP_BY_HOP_HEADERS.has(name.toLowerCase())) {
+          res.setHeader(name, value);
+        }
+      });
+
+      if (req.method === "HEAD" || !resumeResponse.body) {
+        res.end();
+        return;
+      }
+
+      await writeReadableStreamToNode(resumeResponse.body, res);
+      if (!res.writableEnded) {
+        res.end();
+      }
+    } catch (error) {
+      console.error("[nlite] PPR RSC resume failed", error);
+      if (!res.headersSent) {
+        res.statusCode = 500;
+      }
+      if (!res.writableEnded) {
+        res.end();
+      }
+    }
+  };
+}
+
+async function createResumeRequest(req: Connect.IncomingMessage, meta: string) {
+  const host = typeof req.headers.host === "string" ? req.headers.host : "127.0.0.1";
+  const url = new URL(req.originalUrl ?? req.url ?? "/", `http://${host}`);
+
+  const headers = new Headers();
+  for (const [name, value] of Object.entries(req.headers)) {
+    if (!value || HOP_BY_HOP_HEADERS.has(name.toLowerCase())) {
+      continue;
+    }
+
+    headers.set(name, Array.isArray(value) ? value.join(", ") : value);
+  }
+
+  headers.set(RESUME_HEADER, "1");
+  return new Request(url, {
+    method: "POST",
+    headers,
+    body: meta,
+  });
+}
+
+function resolveRouteMeta(distDir: string, rawUrl: string) {
+  const parsedUrl = parseRequestUrl(rawUrl);
+  if (!parsedUrl) return;
+  let metaPath;
+  if (parsedUrl.pathname.endsWith(".html")) {
+    metaPath = path.join(distDir, parsedUrl.pathname.replace(".html", META_POSTFIX));
+  } else if (parsedUrl.pathname.endsWith(".rsc")) {
+    const routePath = normalizeRoutePath(parsedUrl.pathname.slice(0, -".rsc".length) || "/");
+    metaPath = path.join(distDir, normalizeMetaFilePath(routePath));
+  } else {
+    return;
+  }
+
+  if (!existsSync(metaPath)) {
+    return;
+  }
+  return readFile(metaPath, "utf8");
+}
+
+async function writeReadableStreamToNode(stream: ReadableStream<Uint8Array>, res: ServerResponse) {
+  const reader = stream.getReader();
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) {
+        break;
+      }
+
+      if (!res.write(value)) {
+        await new Promise<void>((resolve, reject) => {
+          const onDrain = () => {
+            res.off("error", onError);
+            resolve();
+          };
+          const onError = (error: Error) => {
+            res.off("drain", onDrain);
+            reject(error);
+          };
+          res.once("drain", onDrain);
+          res.once("error", onError);
+        });
+      }
+    }
+  } finally {
+    reader.releaseLock();
+  }
+}
+
+const HOP_BY_HOP_HEADERS = new Set([
+  "connection",
+  "keep-alive",
+  "proxy-authenticate",
+  "proxy-authorization",
+  "te",
+  "trailers",
+  "transfer-encoding",
+  "upgrade",
+  "content-length",
+  "host",
+]);
 
 function createPrerenderWorker(): WorkerProxy<PrerenderWorker> {
   const currentDir = path.dirname(fileURLToPath(import.meta.url));

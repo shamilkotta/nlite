@@ -2,9 +2,10 @@ import { pathToFileURL } from "node:url";
 
 import { NOT_FOUND_ROUTE_PATH, PRERENDER_ORIGIN } from "../utils/constants.js";
 import type { SerializedPrerenderCache } from "./prerender-cache.js";
+import { PostponedState } from "react-dom/static";
 
 type PrerenderWorkerInput = {
-  enablePartialRender?: boolean;
+  ppr?: boolean;
   entryPath: string;
   routePath: string;
   forcePrerender: boolean;
@@ -18,7 +19,7 @@ export type PrerenderWorkerResult =
       skip: false;
       stream: number[];
       rsc: number[];
-      postponed: unknown;
+      postponed: PostponedState | null;
       cache?: SerializedPrerenderCache;
     };
 
@@ -28,7 +29,7 @@ export type PrerenderWorker = {
 };
 
 export async function renderRoute({
-  enablePartialRender,
+  ppr,
   entryPath,
   routePath,
   forcePrerender,
@@ -43,7 +44,7 @@ export async function renderRoute({
 
   const request = new Request(new URL(routePath, PRERENDER_ORIGIN));
   const result = await entry.handlePrerender(request, {
-    enablePartialRender,
+    ppr,
     forcePrerender,
   });
 

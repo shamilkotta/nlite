@@ -251,6 +251,12 @@ function assertSerializableData(value: unknown, key: string) {
     throw new TypeError(`Cached function ${key} returned undefined, which cannot be persisted`);
   }
 
+  if (isReactElement(value)) {
+    throw new TypeError(
+      `Cached function ${key} returned a React element, which cannot be persisted as JSON`,
+    );
+  }
+
   try {
     JSON.stringify(value);
   } catch (error) {
@@ -258,6 +264,15 @@ function assertSerializableData(value: unknown, key: string) {
       cause: error,
     });
   }
+}
+
+function isReactElement(value: unknown): boolean {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "$$typeof" in value &&
+    typeof (value as { $$typeof: unknown }).$$typeof === "symbol"
+  );
 }
 
 function createFetchCacheKey(input: RequestInfo | URL, init?: RequestInit) {
@@ -292,7 +307,7 @@ function responseFromSerialized(entry: SerializedFetchCacheEntry) {
   });
 }
 
-function bytesToBase64(bytes: Uint8Array) {
+export function bytesToBase64(bytes: Uint8Array) {
   let binary = "";
   const chunkSize = 32_768;
 
@@ -303,7 +318,7 @@ function bytesToBase64(bytes: Uint8Array) {
   return btoa(binary);
 }
 
-function base64ToBytes(value: string) {
+export function base64ToBytes(value: string) {
   const binary = atob(value);
   const bytes = new Uint8Array(binary.length);
 
