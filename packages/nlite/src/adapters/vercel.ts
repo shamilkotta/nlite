@@ -5,6 +5,11 @@ import type { Plugin, PluginOption, ResolvedConfig } from "vite";
 import type { NliteOptions } from "../types.js";
 import { NOT_FOUND_RSC_FILE, resolveStaleTimes, STALE_TIME_HEADER } from "../utils/constants.js";
 import { tryCatch } from "../utils/index.js";
+import {
+  collectPartiallyStaticRoutes,
+  removeStaticPprArtifacts,
+  writePprPrerender,
+} from "./vercel-ppr.js";
 
 export interface VercelAdapterOptions {}
 
@@ -14,6 +19,7 @@ const VERCEL_OUTPUT_DIR = ".vercel/output";
 
 export function vercel(_options: VercelAdapterOptions = {}): PluginOption[] {
   let config: ResolvedConfig;
+  let nliteOptions: NliteOptions = {};
   let staleTimes: { static: number; dynamic: number };
 
   const plugin: Plugin = {
@@ -25,9 +31,8 @@ export function vercel(_options: VercelAdapterOptions = {}): PluginOption[] {
     },
     configResolved(resolvedConfig) {
       config = resolvedConfig;
-      staleTimes = resolveStaleTimes(
-        (resolvedConfig as unknown as { nlite?: NliteOptions }).nlite?.staleTimes,
-      );
+      nliteOptions = (resolvedConfig as unknown as { nlite?: NliteOptions }).nlite ?? {};
+      staleTimes = resolveStaleTimes(nliteOptions.staleTimes);
     },
     async closeBundle() {
       const root = config.root;
@@ -42,16 +47,49 @@ export function vercel(_options: VercelAdapterOptions = {}): PluginOption[] {
       const outputDir = path.join(root, VERCEL_OUTPUT_DIR);
       await fs.rm(outputDir, { recursive: true, force: true });
 
-      await copyDir(clientOutDir, path.join(outputDir, "static"));
+      const staticDir = path.join(outputDir, "static");
+      await copyDir(clientOutDir, staticDir);
+
       const runtime = "nodejs24.x";
       await writeVercelFunction(root, serverOutDir, runtime);
+
+      let pprCount = 0;
+      if (nliteOptions.ppr) {
+        pprCount = await writePprPrerenders(staticDir, path.join(outputDir, "functions"));
+      }
+
       await writeVercelConfig(root, staleTimes);
 
-      config.logger.info(`[nlite] Vercel build ready in ${path.relative(root, outputDir)}.`);
+      const pprNote =
+        pprCount > 0 ? ` (${pprCount} PPR prerender${pprCount === 1 ? "" : "s"})` : "";
+      config.logger.info(
+        `[nlite] Vercel build ready in ${path.relative(root, outputDir)}.${pprNote}`,
+      );
     },
   };
 
   return [plugin];
+}
+
+async function writePprPrerenders(staticDir: string, functionsDir: string) {
+  const routes = await collectPartiallyStaticRoutes(staticDir);
+  if (routes.length === 0) {
+    return 0;
+  }
+
+  let groupId = 1;
+  for (const route of routes) {
+    await writePprPrerender({
+      functionsDir,
+      parentFunctionName: FUNCTION_NAME,
+      route,
+      groupId: groupId++,
+      expiration: false,
+    });
+    await removeStaticPprArtifacts(staticDir, route);
+  }
+
+  return routes.length;
 }
 
 async function writeVercelFunction(root: string, serverOutDir: string, runtime: string) {
@@ -130,6 +168,8 @@ async function writeVercelConfig(root: string, staleTimes: { static: number; dyn
             headers: { [STALE_TIME_HEADER]: String(staleTimes.dynamic) },
             continue: true,
           },
+          // Fully-static HTML only. PARTIALLY_STATIC shells are removed from
+          // static/ and served via .prerender-config.json + CDN chain instead.
           {
             src: "/((?:[^/]+/)*[^/.]+)$",
             dest: "/$1.html",
