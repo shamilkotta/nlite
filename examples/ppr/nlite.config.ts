@@ -8,7 +8,7 @@ export default defineConfig({
   staleTimes: {
     static: 600,
   },
-  enablePartialRender: true,
+  ppr: true,
   vite: {
     resolve: {
       alias: {
