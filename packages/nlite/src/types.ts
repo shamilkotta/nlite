@@ -2,6 +2,8 @@ import type { ComponentType, ReactNode } from "react";
 
 import type { ErrorBoundaryFallbackComponent } from "./lib/error-boundary.js";
 import type { MetadataModule } from "./utils/metadata/index.js";
+import type { PrerenderCache } from "./internal/prerender-cache.js";
+import type { PostponedState } from "react-dom/static";
 
 export type RenderingMode = "force-ssg" | "force-ssr";
 
@@ -199,6 +201,7 @@ export interface CollectionSourceConfig {
 export interface NliteOptions {
   appDir?: string;
   staleTimes?: StaleTimes;
+  ppr?: boolean;
 }
 
 export interface NliteMdxProps {
@@ -272,4 +275,9 @@ export interface NliteStaticAssets {
 
 export interface NliteHandlerEnv {
   ASSETS?: NliteStaticAssets;
+}
+
+export interface PrerenderMeta {
+  cache: PrerenderCache;
+  postponed: PostponedState;
 }

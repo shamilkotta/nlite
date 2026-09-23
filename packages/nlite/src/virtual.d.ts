@@ -17,6 +17,10 @@ declare module "virtual:nlite/api" {
   export { apiHandler, couldMatchApi };
 }
 
+declare module "virtual:nlite/cache-runtime" {
+  export { createCachedFunction } from "./internal/cache-runtime.js";
+}
+
 declare module "virtual:nlite/assets" {
   export const scripts: string | null;
   export const styles: string | null;

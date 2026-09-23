@@ -1,8 +1,11 @@
 import { pathToFileURL } from "node:url";
 
 import { NOT_FOUND_ROUTE_PATH, PRERENDER_ORIGIN } from "../utils/constants.js";
+import type { SerializedPrerenderCache } from "./prerender-cache.js";
+import { PostponedState } from "react-dom/static";
 
 type PrerenderWorkerInput = {
+  ppr?: boolean;
   entryPath: string;
   routePath: string;
   forcePrerender: boolean;
@@ -16,6 +19,8 @@ export type PrerenderWorkerResult =
       skip: false;
       stream: number[];
       rsc: number[];
+      postponed: PostponedState | null;
+      cache?: SerializedPrerenderCache;
     };
 
 export type PrerenderWorker = {
@@ -23,11 +28,8 @@ export type PrerenderWorker = {
   renderNotFound(input: { entryPath: string }): Promise<PrerenderWorkerResult>;
 };
 
-declare const process: NodeJS.Process & {
-  send?(message: { type: "dynamicUsage" }): boolean;
-};
-
 export async function renderRoute({
+  ppr,
   entryPath,
   routePath,
   forcePrerender,
@@ -41,22 +43,25 @@ export async function renderRoute({
   }
 
   const request = new Request(new URL(routePath, PRERENDER_ORIGIN));
-  const { rsc, stream, skip } = await entry.handlePrerender(request, {
+  const result = await entry.handlePrerender(request, {
+    ppr,
     forcePrerender,
-    onDynamicUsage() {
-      process.send?.({ type: "dynamicUsage" });
-    },
   });
 
-  if (skip || !stream || !rsc) {
+  if (result.skip) {
     return { skip: true };
   }
 
-  const [streamBytes, rscBytes] = await Promise.all([readStream(stream), readStream(rsc)]);
+  const [streamBytes, rscBytes] = await Promise.all([
+    readStream(result.stream),
+    readStream(result.rsc),
+  ]);
   return {
     skip: false,
     stream: [...streamBytes],
     rsc: [...rscBytes],
+    postponed: result.postponed,
+    cache: result.cache,
   };
 }
 
@@ -74,21 +79,22 @@ export async function renderNotFound({
   }
 
   const request = new Request(new URL(NOT_FOUND_ROUTE_PATH, PRERENDER_ORIGIN));
-  const { rsc, stream, skip } = await entry.handleGlobalNotFoundPrerender(request, {
-    onDynamicUsage() {
-      process.send?.({ type: "dynamicUsage" });
-    },
-  });
+  const result = await entry.handleGlobalNotFoundPrerender(request, {});
 
-  if (skip || !stream || !rsc) {
+  if (result.skip) {
     return { skip: true };
   }
 
-  const [streamBytes, rscBytes] = await Promise.all([readStream(stream), readStream(rsc)]);
+  const [streamBytes, rscBytes] = await Promise.all([
+    readStream(result.stream),
+    readStream(result.rsc),
+  ]);
   return {
     skip: false,
     stream: [...streamBytes],
     rsc: [...rscBytes],
+    postponed: result.postponed,
+    cache: result.cache,
   };
 }
 

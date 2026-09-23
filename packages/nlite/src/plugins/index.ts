@@ -1,9 +1,18 @@
+import { createHash } from "node:crypto";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import react from "@vitejs/plugin-react";
 import rsc from "@vitejs/plugin-rsc";
-import type { ConfigEnv, ModuleNode, Plugin, PluginOption, ViteDevServer } from "vite";
+import { transformHoistInlineDirective } from "@vitejs/plugin-rsc/transforms";
+import {
+  parse,
+  type ConfigEnv,
+  type ModuleNode,
+  type Plugin,
+  type PluginOption,
+  type ViteDevServer,
+} from "vite";
 
 import { api } from "./api.js";
 import { assets } from "./assets.js";
@@ -14,6 +23,7 @@ import type { NliteOptions } from "../types.js";
 
 const VIRTUAL_MANIFEST_ID = "virtual:nlite/routes";
 const VIRTUAL_RUNTIME_ID = "virtual:nlite/runtime";
+const VIRTUAL_CACHE_RUNTIME_ID = "virtual:nlite/cache-runtime";
 const RESOLVED_MANIFEST_ID = `\0${VIRTUAL_MANIFEST_ID}`;
 
 interface ModuleGraphLike {
@@ -28,6 +38,7 @@ export function nlite(options: NliteOptions = {}): PluginOption[] {
 
   const __dirname = path.dirname(fileURLToPath(import.meta.url));
   const runtimeId = path.join(__dirname, "runtime.mjs");
+  const cacheRuntimeId = path.join(__dirname, "internal", "cache-runtime.mjs");
 
   const frameworkPlugin: Plugin = {
     name: "nlite",
@@ -67,7 +78,7 @@ export function nlite(options: NliteOptions = {}): PluginOption[] {
       watchRouteFiles(server, appRoot);
     },
     resolveId(id) {
-      if (id === RESOLVED_MANIFEST_ID || id === runtimeId) {
+      if (id === RESOLVED_MANIFEST_ID || id === runtimeId || id === cacheRuntimeId) {
         return id;
       }
 
@@ -79,6 +90,10 @@ export function nlite(options: NliteOptions = {}): PluginOption[] {
         return runtimeId;
       }
 
+      if (id === VIRTUAL_CACHE_RUNTIME_ID) {
+        return cacheRuntimeId;
+      }
+
       return;
     },
     async load(id) {
@@ -88,6 +103,9 @@ export function nlite(options: NliteOptions = {}): PluginOption[] {
       }
 
       return;
+    },
+    async transform(code, id) {
+      return transformUseCacheDirectives(code, id, projectRoot);
     },
   };
 
@@ -105,6 +123,66 @@ export function nlite(options: NliteOptions = {}): PluginOption[] {
     prerender(options),
     api(options),
   ];
+}
+
+export async function transformUseCacheDirectives(
+  code: string,
+  id: string,
+  projectRoot: string,
+): Promise<{ code: string; map: { mappings: string } } | undefined> {
+  if (!code.includes('"use cache"') && !code.includes("'use cache'")) return;
+
+  const relativeId = normalizeModuleId(path.relative(projectRoot, id));
+  const ast = await parse(relativeId, code);
+  if (ast.errors.length > 0) {
+    throw new Error(ast.errors[0]?.message ?? `Failed to parse ${relativeId}`);
+  }
+  stripNullDirectives(ast);
+  const result = transformHoistInlineDirective(code, ast.program, {
+    directive: "use cache",
+    hoistRuntime: true,
+    noExport: true,
+    runtime: (value, name, meta) => {
+      const { start } = meta.valueNode as unknown as { start: number };
+      const functionId = createHash("sha256")
+        .update(`${relativeId}:${start}:${name}`)
+        .digest("hex")
+        .slice(0, 24);
+      return `createCachedFunction(${JSON.stringify(functionId)}, ${value})`;
+    },
+  });
+
+  if (result.names.length === 0) return;
+
+  result.output.prepend('import { createCachedFunction } from "virtual:nlite/cache-runtime";\n');
+
+  return {
+    code: result.output.toString(),
+    map: result.output.generateMap({ hires: "boundary" }),
+  };
+}
+
+function normalizeModuleId(id: string) {
+  return id.replaceAll(path.sep, "/").split("?")[0]!;
+}
+
+function stripNullDirectives(node: unknown) {
+  if (!node || typeof node !== "object") return;
+
+  const value = node as { type?: string; directive?: string | null };
+  if (value.type === "ExpressionStatement" && value.directive == null) {
+    delete value.directive;
+  }
+
+  for (const child of Object.values(value)) {
+    if (Array.isArray(child)) {
+      for (const item of child) stripNullDirectives(item);
+      continue;
+    }
+    if (child && typeof child === "object" && "type" in child) {
+      stripNullDirectives(child);
+    }
+  }
 }
 
 function watchRouteFiles(server: ViteDevServer, appRoot: string) {
