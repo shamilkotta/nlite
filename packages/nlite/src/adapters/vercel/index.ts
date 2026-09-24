@@ -51,7 +51,7 @@ export function vercel(_options: VercelAdapterOptions = {}): PluginOption[] {
       await writeVercelFunction(root, serverOutDir, runtime);
 
       if (nliteOptions.ppr) {
-        await writePprPrerenders(staticDir, path.join(outputDir, "functions"));
+        await writePprPrerenders(staticDir, path.join(outputDir, "functions"), staleTimes.dynamic);
       }
 
       await writeVercelConfig(root, staleTimes);
@@ -63,7 +63,7 @@ export function vercel(_options: VercelAdapterOptions = {}): PluginOption[] {
   return [plugin];
 }
 
-async function writePprPrerenders(staticDir: string, functionsDir: string) {
+async function writePprPrerenders(staticDir: string, functionsDir: string, staleTime: number) {
   const routes = await collectPartiallyStaticRoutes(staticDir);
   if (routes.length === 0) {
     return 0;
@@ -76,6 +76,7 @@ async function writePprPrerenders(staticDir: string, functionsDir: string) {
       parentFunctionName: FUNCTION_NAME,
       route,
       groupId: groupId++,
+      staleTime,
     });
     await removeStaticPprArtifacts(staticDir, route);
   }
@@ -133,10 +134,8 @@ async function writeFunctionConfig(functionDir: string, runtime: string) {
         runtime,
         handler: "index.js",
         launcherType: "Nodejs",
-        // Page functions in adapter-vercel stream more than one payload (shell + resume).
-        supportsMultiPayloads: true,
         supportsResponseStreaming: true,
-        // Our entry is `export default { fetch }`, not Next's Node launcher.
+        supportsMultiPayloads: true,
         useWebApi: true,
       },
       null,
@@ -165,20 +164,11 @@ async function writeVercelConfig(root: string, staleTimes: { static: number; dyn
             headers: { [STALE_TIME_HEADER]: String(staleTimes.static) },
             continue: true,
           },
-          // Root Flight URL is `/.rsc`. The prerender file is `index.rsc`,
-          // same as adapter-vercel.
-          {
-            src: "^/\\.rsc$",
-            dest: "/index.rsc",
-            continue: true,
-          },
           {
             src: `/${NOT_FOUND_RSC_FILE}`,
             headers: { [STALE_TIME_HEADER]: String(staleTimes.dynamic) },
             continue: true,
           },
-          // Fully-static HTML only. PARTIALLY_STATIC shells are removed from
-          // static/ and served via .prerender-config.json + CDN chain instead.
           {
             src: "/((?:[^/]+/)*[^/.]+)$",
             dest: "/$1.html",

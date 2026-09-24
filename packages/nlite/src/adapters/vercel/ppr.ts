@@ -1,7 +1,7 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
 
-import { META_POSTFIX } from "../../utils/constants.js";
+import { META_POSTFIX, STALE_TIME_HEADER } from "../../utils/constants.js";
 import { normalizeHtmlFilePath, normalizeRoutePath } from "../../utils/path.js";
 import {
   HTML_CONTENT_TYPE,
@@ -36,6 +36,15 @@ export function getPostponedStateContentType(
   return `${PRE_RENDER_CONTENT_TYPE}; state-length=${Buffer.byteLength(
     postponedState,
   )}; origin=${JSON.stringify(originContentType)}`;
+}
+
+export function chainOutputPath(routePath: string, rsc: boolean): string {
+  if (routePath === "/") {
+    return rsc ? ".rsc" : "index";
+  }
+
+  const prerenderPath = toVercelPrerenderPath(routePath);
+  return rsc ? `${prerenderPath}.rsc` : prerenderPath;
 }
 
 export function toVercelPrerenderPath(routePath: string): string {
@@ -102,6 +111,7 @@ export async function writePprPrerender(options: {
   groupId: number;
   expiration?: number | false;
   staleExpiration?: number;
+  staleTime?: number;
 }): Promise<WrittenPprPrerender> {
   const {
     functionsDir,
@@ -110,17 +120,19 @@ export async function writePprPrerender(options: {
     groupId,
     expiration = PPR_EXPIRATION,
     staleExpiration,
+    staleTime = 0,
   } = options;
 
   const prerenderPath = toVercelPrerenderPath(route.routePath);
   const postponedState = route.metaText;
   const stateLength = Buffer.byteLength(postponedState);
-  const baseName = path.basename(prerenderPath);
+  const baseName = path.basename(chainOutputPath(route.routePath, false));
+  const rscBaseName = path.basename(chainOutputPath(route.routePath, true));
 
   const fallbackFileName = `${baseName}.prerender-fallback.html`;
   const configFileName = `${baseName}.prerender-config.json`;
-  const rscFallbackFileName = `${baseName}.rsc.prerender-fallback.rsc`;
-  const rscConfigFileName = `${baseName}.rsc.prerender-config.json`;
+  const rscFallbackFileName = `${rscBaseName}.prerender-fallback.rsc`;
+  const rscConfigFileName = `${rscBaseName}.prerender-config.json`;
 
   const outputDir = path.join(functionsDir, path.dirname(prerenderPath));
   await fs.mkdir(outputDir, { recursive: true });
@@ -131,8 +143,10 @@ export async function writePprPrerender(options: {
   const rscConfigPath = path.join(outputDir, rscConfigFileName);
   const parentFunctionDir = path.join(functionsDir, `${parentFunctionName}.func`);
 
-  await fs.writeFile(fallbackPath, `${postponedState}${route.htmlText}`);
-  await fs.writeFile(rscFallbackPath, postponedState);
+  await Promise.all([
+    fs.writeFile(fallbackPath, `${postponedState}${route.htmlText}`),
+    fs.writeFile(rscFallbackPath, postponedState),
+  ]);
 
   const shared = {
     group: groupId,
@@ -159,7 +173,7 @@ export async function writePprPrerender(options: {
       headers: {
         [NEXT_RESUME_HEADER]: "1",
       },
-      outputPath: prerenderPath,
+      outputPath: chainOutputPath(route.routePath, false),
     },
   };
 
@@ -168,13 +182,14 @@ export async function writePprPrerender(options: {
     initialHeaders: {
       "content-type": getPostponedStateContentType(postponedState, RSC_CONTENT_TYPE),
       "cache-control": "private, no-store, no-cache, max-age=0, must-revalidate",
+      [STALE_TIME_HEADER]: String(staleTime),
     },
     fallback: rscFallbackFileName,
     chain: {
       headers: {
         [NEXT_RESUME_HEADER]: "1",
       },
-      outputPath: `${prerenderPath}.rsc`,
+      outputPath: chainOutputPath(route.routePath, true),
     },
   };
 
@@ -182,7 +197,10 @@ export async function writePprPrerender(options: {
     fs.writeFile(configPath, `${JSON.stringify(config, null, 2)}\n`),
     fs.writeFile(rscConfigPath, `${JSON.stringify(rscConfig, null, 2)}\n`),
     linkFunction(path.join(functionsDir, `${prerenderPath}.func`), parentFunctionDir),
-    linkFunction(path.join(functionsDir, `${prerenderPath}.rsc.func`), parentFunctionDir),
+    linkFunction(
+      path.join(functionsDir, `${chainOutputPath(route.routePath, true)}.func`),
+      parentFunctionDir,
+    ),
   ]);
 
   return {
