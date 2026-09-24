@@ -18,9 +18,9 @@ import {
 import { isNliteRouterError } from "../lib/navigation/errors.js";
 import type { RscPayload, NliteHandlerEnv, PrerenderMeta } from "../types.js";
 import type { PostponedState } from "react-dom/static";
+import { NEXT_RESUME_HEADER } from "../adapters/vercel/constants.js";
 import {
   NOT_FOUND_ROUTE_PATH,
-  NEXT_RESUME_HEADER,
   RESPONSE_STATUS_HEADER,
   RESUME_HEADER,
   STALE_TIME_HEADER,
@@ -39,7 +39,7 @@ function onRscError(error: unknown) {
     return;
   }
 
-  throw error;
+  return (error as Error).message; // TODO: revisit this
 }
 
 export async function handler(request: Request, env?: NliteHandlerEnv) {
@@ -145,18 +145,34 @@ async function resumeRenderResponse(
   meta: PrerenderMeta,
 ) {
   const url = new URL(request.url);
-  const rscStream = await runWithRequestContext(
+  const resumed = await runWithRequestContext(
     request,
     async () => {
       const metadata = await resolveRouteMetadata(match.route, match.params, url.searchParams);
       const app = createRouteElement(match.route, match.params, renderRequest.url.searchParams);
-      return renderToReadableStream<RscPayload>({ root: app, metadata }, { onError: onRscError });
+      const rscStream = renderToReadableStream<RscPayload>(
+        { root: app, metadata },
+        { onError: onRscError },
+      );
+
+      if (renderRequest.isRsc) {
+        return { stream: rscStream, status: 200, isRsc: true as const };
+      }
+
+      const ssrEntry = await import.meta.viteRsc.loadModule<typeof import("./entry.ssr.ts")>(
+        "ssr",
+        "index",
+      );
+      const html = await ssrEntry.resumeHtml(rscStream, meta.postponed, {
+        url: renderRequest.url,
+      });
+      return { stream: html.stream, status: html.status ?? 200, isRsc: false as const };
     },
     { cache: meta.cache, searchParams: renderRequest.url.searchParams },
   );
 
-  if (renderRequest.isRsc) {
-    return new Response(rscStream, {
+  if (resumed.isRsc) {
+    return new Response(resumed.stream, {
       status: 200,
       headers: {
         "content-type": "text/x-component;charset=utf-8",
@@ -166,17 +182,8 @@ async function resumeRenderResponse(
     });
   }
 
-  const ssrEntry = await import.meta.viteRsc.loadModule<typeof import("./entry.ssr.ts")>(
-    "ssr",
-    "index",
-  );
-  const { stream: htmlStream, status: renderStatus } = await ssrEntry.resumeHtml(
-    rscStream,
-    meta.postponed,
-    {
-      url: renderRequest.url,
-    },
-  );
+  const htmlStream = resumed.stream;
+  const renderStatus = resumed.status;
 
   return new Response(htmlStream, {
     status: renderStatus ?? 200,

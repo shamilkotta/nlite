@@ -139,7 +139,7 @@ async function renderStatic(config: ResolvedConfig, options: NliteOptions) {
           path.join(outDir, normalizeMetaFilePath(routePath)),
           JSON.stringify({
             postponed: result.postponed ?? undefined,
-            cache: result.cache,
+            cache: options.ppr ? result.cache : undefined,
             renderingMode: result.postponed ? "PARTIALLY_STATIC" : "STATIC",
           }),
         ),

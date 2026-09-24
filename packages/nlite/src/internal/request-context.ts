@@ -29,6 +29,25 @@ export class DynamicPrerenderUsageError extends Error {
 
 const requestContext = new AsyncLocalStorage<RequestContext>();
 
+let originFetch: typeof fetch = globalThis.fetch.bind(globalThis);
+
+const patchedFetch = ((input: RequestInfo | URL, init?: RequestInit) => {
+  const context = requestContext.getStore();
+  if (!context) return originFetch(input, init);
+
+  if (!isDynamicFetch(input, init)) {
+    return context.cache.fetch(input, init, originFetch, context.cacheSignal);
+  }
+
+  return markDynamicUsage("fetch").then(() => originFetch(input, init));
+}) as typeof fetch;
+
+function ensureFetchPatched() {
+  if (globalThis.fetch === patchedFetch) return;
+  originFetch = globalThis.fetch.bind(globalThis);
+  globalThis.fetch = patchedFetch;
+}
+
 export function runWithRequestContext<T>(
   request: Request,
   callback: () => T,
@@ -41,6 +60,8 @@ export function runWithRequestContext<T>(
     cacheSignal?: CacheSignal;
   } = {},
 ) {
+  ensureFetchPatched();
+
   const url = new URL(request.url);
   const store: RequestContext = {
     request,
@@ -52,7 +73,7 @@ export function runWithRequestContext<T>(
     cacheSignal: options.cacheSignal,
   };
 
-  return requestContext.run(store, () => withContextFetch(callback, store));
+  return requestContext.run(store, callback);
 }
 
 function markDynamicUsage(reason: DynamicReason): Promise<void> {
@@ -106,36 +127,6 @@ export function trackSearchParams<T extends URLSearchParams>(value: T): Promise<
 export function getRequestCache() {
   const context = getRequestContext("cache");
   return { cache: context.cache, cacheSignal: context.cacheSignal };
-}
-
-function withContextFetch<T>(callback: () => T, context: RequestContext) {
-  const originalFetch = globalThis.fetch;
-  let restoreImmediately = true;
-
-  globalThis.fetch = ((input: RequestInfo | URL, init?: RequestInit) => {
-    if (!isDynamicFetch(input, init)) {
-      return context.cache.fetch(input, init, originalFetch, context.cacheSignal);
-    }
-
-    return markDynamicUsage("fetch").then(() => originalFetch(input, init));
-  }) as typeof fetch;
-
-  try {
-    const result = callback();
-
-    if (result && typeof result === "object" && "finally" in result) {
-      restoreImmediately = false;
-      return (result as unknown as Promise<Awaited<T>>).finally(() => {
-        globalThis.fetch = originalFetch;
-      }) as T;
-    }
-
-    return result;
-  } finally {
-    if (restoreImmediately) {
-      globalThis.fetch = originalFetch;
-    }
-  }
 }
 
 function getRequestContext(apiName: string) {

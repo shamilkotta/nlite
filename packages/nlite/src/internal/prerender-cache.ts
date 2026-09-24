@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+
 export interface SerializedFetchCacheEntry {
   body: string;
   headers: [string, string][];
@@ -121,25 +123,51 @@ export class PrerenderCache {
     originalFetch: typeof fetch,
     signal?: CacheSignal,
   ): Promise<Response> {
-    const key = createFetchCacheKey(input, init);
-    const existing = this.fetchEntries.get(key);
-    if (existing) {
-      return (await existing).response.clone();
+    if (!fetchBodyNeedsAsyncRead(input, init)) {
+      const prepared = prepareFetchCacheRequest(input, init);
+      const existing = this.fetchEntries.get(prepared.key);
+      if (existing) {
+        const hit = existing.then((entry) => entry.response.clone());
+        return signal ? signal.track(hit) : hit;
+      }
+
+      const read = originalFetch(prepared.input, prepared.init).then(async (response) => ({
+        response,
+        serialized: await serializeResponse(response.clone()),
+      }));
+      this.fetchEntries.set(prepared.key, read);
+      const tracked = signal?.track(read) ?? read;
+
+      try {
+        return (await tracked).response.clone();
+      } catch (error) {
+        this.fetchEntries.delete(prepared.key);
+        throw error;
+      }
     }
 
-    const read = originalFetch(input, init).then(async (response) => ({
-      response,
-      serialized: await serializeResponse(response.clone()),
-    }));
-    const trackedRead = signal?.track(read) ?? read;
-    this.fetchEntries.set(key, trackedRead);
+    const run = async () => {
+      const prepared = await prepareFetchCacheRequestAsync(input, init);
+      const existing = this.fetchEntries.get(prepared.key);
+      if (existing) {
+        return (await existing).response.clone();
+      }
 
-    try {
-      return (await trackedRead).response.clone();
-    } catch (error) {
-      this.fetchEntries.delete(key);
-      throw error;
-    }
+      const read = originalFetch(prepared.input, prepared.init).then(async (response) => ({
+        response,
+        serialized: await serializeResponse(response.clone()),
+      }));
+      this.fetchEntries.set(prepared.key, read);
+
+      try {
+        return (await read).response.clone();
+      } catch (error) {
+        this.fetchEntries.delete(prepared.key);
+        throw error;
+      }
+    };
+
+    return signal ? signal.track(run()) : run();
   }
 
   data<T>(
@@ -275,19 +303,314 @@ function isReactElement(value: unknown): boolean {
   );
 }
 
-function createFetchCacheKey(input: RequestInfo | URL, init?: RequestInit) {
-  const request = new Request(input, init);
-  return JSON.stringify({
-    url: request.url,
-    method: request.method,
-    headers: [...request.headers.entries()],
-    credentials: request.credentials,
-    mode: request.mode,
-    redirect: request.redirect,
-    referrer: request.referrer,
-    referrerPolicy: request.referrerPolicy,
-    integrity: request.integrity,
-  });
+const FETCH_CACHE_KEY_PREFIX = "v4";
+type FetchBody = NonNullable<RequestInit["body"] | Request["body"]>;
+type CacheKeyInit = RequestInit & { _ogBody?: FetchBody };
+type PreparedFetch = {
+  key: string;
+  input: RequestInfo | URL;
+  init: RequestInit | undefined;
+};
+
+function fetchBodyNeedsAsyncRead(input: RequestInfo | URL, init?: RequestInit) {
+  const body =
+    init?.body ??
+    (input && typeof input === "object" && "body" in input ? (input as Request).body : null);
+  if (!body || typeof body === "string" || isBodyByteSequence(body)) return false;
+  if (isBodyFormDataOrURLSearchParams(body)) {
+    for (const [, val] of body.entries()) {
+      if (typeof val !== "string") return true;
+    }
+    return false;
+  }
+  return isBodyReadableStream(body) || isBodyBlob(body);
+}
+
+function prepareFetchCacheRequest(
+  input: RequestInfo | URL,
+  init: RequestInit | undefined,
+): PreparedFetch {
+  const { resolvedInput, resolvedInit, isRequestInput, url, keyInit } = resolveFetchCacheInputs(
+    input,
+    init,
+  );
+  const key = generateFetchCacheKeySync(url, keyInit);
+  return finishPreparedFetch(key, resolvedInput, resolvedInit, isRequestInput);
+}
+
+async function prepareFetchCacheRequestAsync(
+  input: RequestInfo | URL,
+  init: RequestInit | undefined,
+): Promise<PreparedFetch> {
+  const { resolvedInput, resolvedInit, isRequestInput, url, keyInit } = resolveFetchCacheInputs(
+    input,
+    init,
+  );
+  const key = await generateFetchCacheKeyAsync(url, keyInit);
+  return finishPreparedFetch(key, resolvedInput, resolvedInit, isRequestInput);
+}
+
+function resolveFetchCacheInputs(input: RequestInfo | URL, init: RequestInit | undefined) {
+  let resolvedInput = input;
+  let resolvedInit = init;
+
+  const isRequestInput =
+    !!resolvedInput &&
+    typeof resolvedInput === "object" &&
+    typeof (resolvedInput as Request).method === "string";
+
+  if (isRequestInput && resolvedInit) {
+    const { next: _next, ...overrides } = resolvedInit as RequestInit & {
+      next?: unknown;
+    };
+    resolvedInput = new Request(resolvedInput as Request, overrides);
+    resolvedInit = undefined;
+  }
+
+  const url = normalizeFetchCacheUrl(
+    isRequestInput ? (resolvedInput as Request).url : resolvedInput,
+  );
+
+  const keyInit: CacheKeyInit = isRequestInput
+    ? (resolvedInput as CacheKeyInit)
+    : ((resolvedInit ?? {}) as CacheKeyInit);
+
+  return { resolvedInput, resolvedInit, isRequestInput, url, keyInit };
+}
+
+function finishPreparedFetch(
+  key: string,
+  resolvedInput: RequestInfo | URL,
+  resolvedInit: RequestInit | undefined,
+  isRequestInput: boolean,
+): PreparedFetch {
+  if (isRequestInput) {
+    const reqInput = resolvedInput as Request & { _ogBody?: FetchBody };
+    if (reqInput._ogBody !== undefined) {
+      return {
+        key,
+        input: new Request(reqInput.url, {
+          body: reqInput._ogBody,
+          cache: reqInput.cache,
+          credentials: reqInput.credentials,
+          headers: reqInput.headers,
+          integrity: reqInput.integrity,
+          keepalive: reqInput.keepalive,
+          method: reqInput.method,
+          mode: reqInput.mode,
+          redirect: reqInput.redirect,
+          referrer: reqInput.referrer,
+          referrerPolicy: reqInput.referrerPolicy,
+          duplex: "half",
+        } as RequestInit),
+        init: resolvedInit,
+      };
+    }
+    return { key, input: resolvedInput, init: resolvedInit };
+  }
+
+  if (resolvedInit && (resolvedInit as CacheKeyInit)._ogBody !== undefined) {
+    const { _ogBody, body, ...otherInit } = resolvedInit as CacheKeyInit;
+    return {
+      key,
+      input: resolvedInput,
+      init: { ...otherInit, body: _ogBody ?? body },
+    };
+  }
+
+  return { key, input: resolvedInput, init: resolvedInit };
+}
+
+function normalizeFetchCacheUrl(input: RequestInfo | URL) {
+  try {
+    const url = new URL(input instanceof Request ? input.url : input);
+    url.username = "";
+    url.password = "";
+    return url.href;
+  } catch {
+    return "";
+  }
+}
+
+function generateFetchCacheKeySync(url: string, init: CacheKeyInit): string {
+  const { bodyChunks, bodyType } = collectSyncBodyChunks(init);
+  return hashFetchCacheKey(url, init, bodyType, bodyChunks);
+}
+
+async function generateFetchCacheKeyAsync(url: string, init: CacheKeyInit): Promise<string> {
+  const { bodyChunks, bodyType } = await collectAsyncBodyChunks(init);
+  return hashFetchCacheKey(url, init, bodyType, bodyChunks);
+}
+
+function collectSyncBodyChunks(init: CacheKeyInit) {
+  const bodyChunks: string[] = [];
+  let bodyType: string | null = null;
+  const body = init.body;
+
+  if (!body) return { bodyChunks, bodyType };
+
+  if (isBodyByteSequence(body)) {
+    bodyChunks.push(`bytes:${toHex(body)}`);
+    init._ogBody = body;
+  } else if (isBodyFormDataOrURLSearchParams(body)) {
+    bodyType =
+      String(body) === "[object FormData]"
+        ? "multipart/form-data; boundary="
+        : "application/x-www-form-urlencoded;charset=UTF-8";
+    init._ogBody = body;
+    for (const [key, val] of body.entries()) {
+      bodyChunks.push(`key:${key}`);
+      if (typeof val !== "string") {
+        throw new Error("FormData file bodies require async cache key generation");
+      }
+      bodyChunks.push(`str:${val}`);
+    }
+  } else if (typeof body === "string") {
+    bodyChunks.push(`str:${body}`);
+    init._ogBody = body;
+    bodyType = "text/plain;charset=UTF-8";
+  } else {
+    throw new Error(`Unsupported sync body type: ${typeof body}`);
+  }
+
+  return { bodyChunks, bodyType };
+}
+
+async function collectAsyncBodyChunks(init: CacheKeyInit) {
+  const bodyChunks: string[] = [];
+  let bodyType: string | null = null;
+  const body = init.body;
+
+  if (!body) return { bodyChunks, bodyType };
+
+  if (isBodyByteSequence(body)) {
+    bodyChunks.push(`bytes:${toHex(body)}`);
+    init._ogBody = body;
+  } else if (isBodyReadableStream(body)) {
+    const chunks: Uint8Array[] = [];
+    const encoder = new TextEncoder();
+    try {
+      await body.pipeTo(
+        new WritableStream({
+          write(chunk) {
+            chunks.push(typeof chunk === "string" ? encoder.encode(chunk) : chunk);
+          },
+        }),
+      );
+      const length = chunks.reduce((total, arr) => total + arr.length, 0);
+      const arrayBuffer = new Uint8Array(length);
+      let offset = 0;
+      for (const chunk of chunks) {
+        arrayBuffer.set(chunk, offset);
+        offset += chunk.length;
+      }
+      bodyChunks.push(`bytes:${toHex(arrayBuffer)}`);
+      init._ogBody = arrayBuffer;
+    } catch (error) {
+      console.error("Problem reading body", error);
+    }
+  } else if (isBodyFormDataOrURLSearchParams(body)) {
+    bodyType =
+      String(body) === "[object FormData]"
+        ? "multipart/form-data; boundary="
+        : "application/x-www-form-urlencoded;charset=UTF-8";
+    init._ogBody = body;
+    for (const [key, val] of body.entries()) {
+      bodyChunks.push(`key:${key}`);
+      if (typeof val === "string") {
+        bodyChunks.push(`str:${val}`);
+      } else {
+        bodyChunks.push("file", val.name, val.type, `bytes:${toHex(await val.arrayBuffer())}`);
+      }
+    }
+  } else if (isBodyBlob(body)) {
+    const arrayBuffer = await body.arrayBuffer();
+    bodyChunks.push("blob", body.type, `bytes:${toHex(arrayBuffer)}`);
+    init._ogBody = new Blob([arrayBuffer], { type: body.type });
+    bodyType = body.type;
+  } else if (typeof body === "string") {
+    bodyChunks.push(`str:${body}`);
+    init._ogBody = body;
+    bodyType = "text/plain;charset=UTF-8";
+  } else {
+    throw new Error(`Unsupported body type: ${typeof body}`);
+  }
+
+  return { bodyChunks, bodyType };
+}
+
+function hashFetchCacheKey(
+  url: string,
+  init: CacheKeyInit,
+  bodyType: string | null,
+  bodyChunks: string[],
+) {
+  const headers =
+    typeof (init.headers ?? {}).keys === "function"
+      ? Object.fromEntries(init.headers as Headers)
+      : Object.assign({} as Record<string, string>, init.headers);
+
+  if ("traceparent" in headers) delete headers.traceparent;
+  if ("tracestate" in headers) delete headers.tracestate;
+
+  const cacheString = JSON.stringify([
+    FETCH_CACHE_KEY_PREFIX,
+    "",
+    url,
+    init.method,
+    bodyType,
+    headers,
+    init.mode,
+    init.redirect,
+    init.credentials,
+    init.referrer,
+    init.referrerPolicy,
+    init.integrity,
+    init.cache,
+    bodyChunks,
+  ]);
+
+  return hashString(cacheString);
+}
+
+function toHex(buffer: ArrayBufferView | ArrayBuffer) {
+  const bytes = isArrayBuffer(buffer)
+    ? new Uint8Array(buffer)
+    : new Uint8Array(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  let hex = "";
+  for (const byte of bytes) {
+    hex += byte.toString(16).padStart(2, "0");
+  }
+  return hex;
+}
+
+function isArrayBuffer(buffer: ArrayBuffer | ArrayBufferView): buffer is ArrayBuffer {
+  return !("buffer" in buffer);
+}
+
+function isBodyByteSequence(body: FetchBody): body is ArrayBufferView<ArrayBuffer> | ArrayBuffer {
+  return typeof body === "object" && body !== null && "byteLength" in body;
+}
+
+function isBodyReadableStream(body: FetchBody): body is ReadableStream {
+  return typeof (body as ReadableStream).getReader === "function";
+}
+
+function isBodyFormDataOrURLSearchParams(body: FetchBody): body is FormData | URLSearchParams {
+  return typeof (body as FormData).keys === "function";
+}
+
+function isBodyBlob(body: FetchBody): body is Blob {
+  return (
+    typeof body === "object" &&
+    body !== null &&
+    typeof (body as Blob).arrayBuffer === "function" &&
+    !("byteLength" in body)
+  );
+}
+
+function hashString(cacheString: string) {
+  return createHash("sha256").update(cacheString).digest("hex");
 }
 
 async function serializeResponse(response: Response): Promise<SerializedFetchCacheEntry> {

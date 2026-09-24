@@ -34,6 +34,82 @@ describe("PrerenderCache", () => {
     expect(fetchImpl).toHaveBeenCalledTimes(1);
   });
 
+  it("keys force-cache fetches", async () => {
+    const fetchImpl = vi.fn(async () => new Response("cached"));
+    const cache = new PrerenderCache();
+
+    await cache.fetch("http://localhost:8000", { cache: "force-cache" }, fetchImpl);
+    const restored = new PrerenderCache(await cache.serialize());
+    const resumed = await restored.fetch(
+      "http://localhost:8000/",
+      { cache: "force-cache", headers: { traceparent: "00-abc" } },
+      fetchImpl,
+    );
+
+    expect(await resumed.text()).toBe("cached");
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+
+    await restored.fetch(
+      new Request("http://localhost:8000/", {
+        cache: "force-cache",
+        referrer: "https://vercel.example/",
+      }),
+      undefined,
+      fetchImpl,
+    );
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+
+    await restored.fetch(
+      "http://localhost:8000/",
+      { cache: "force-cache", method: "POST", body: "one" },
+      fetchImpl,
+    );
+    await restored.fetch(
+      "http://localhost:8000/",
+      { cache: "force-cache", method: "POST", body: "two" },
+      fetchImpl,
+    );
+    expect(fetchImpl).toHaveBeenCalledTimes(4);
+  });
+
+  it("resolves a stored fetch without re-fetching and tracks a miss before it starts", async () => {
+    const fetchImpl = vi.fn(async () => new Response("cached"));
+    const cache = new PrerenderCache();
+    await cache.fetch("http://localhost:8000", { cache: "force-cache" }, fetchImpl);
+    const restored = new PrerenderCache(await cache.serialize());
+
+    const hit = await restored.fetch("http://localhost:8000", { cache: "force-cache" }, fetchImpl);
+    expect(await hit.text()).toBe("cached");
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+
+    const signal = new CacheSignal();
+    let ready = false;
+    const readyPromise = signal.ready().then(() => {
+      ready = true;
+    });
+    let releaseFetch!: () => void;
+    const blockedFetch = vi.fn(
+      () =>
+        new Promise<Response>((resolve) => {
+          releaseFetch = () => resolve(new Response("fresh"));
+        }),
+    );
+    const pendingMiss = new PrerenderCache().fetch(
+      "http://localhost:8000",
+      { cache: "force-cache" },
+      blockedFetch,
+      signal,
+    );
+
+    await vi.waitFor(() => expect(blockedFetch).toHaveBeenCalled());
+    expect(ready).toBe(false);
+    releaseFetch();
+    await pendingMiss;
+    await readyPromise;
+    expect(ready).toBe(true);
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+  });
+
   it("shares data calls by function ID and structurally equivalent arguments", async () => {
     const generate = vi.fn(async () => ({ name: "Ada" }));
     const cache = new PrerenderCache();
@@ -101,6 +177,87 @@ describe("request cache context", () => {
     }
 
     expect(fetchImpl).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps the request cache for work scheduled inside the request", async () => {
+    const originalFetch = globalThis.fetch;
+    const fetchImpl = vi.fn(async () => new Response("from-network"));
+    globalThis.fetch = fetchImpl;
+
+    try {
+      const rendered = new Promise<string>((resolve, reject) => {
+        void runWithRequestContext(new Request("https://example.com"), () => {
+          queueMicrotask(async () => {
+            try {
+              const cached = await fetch("https://example.com/data", { cache: "force-cache" });
+              const again = await fetch("https://example.com/data", { cache: "force-cache" });
+              resolve((await cached.text()) + (await again.text()));
+            } catch (error) {
+              reject(error);
+            }
+          });
+        });
+      });
+
+      expect(await rendered).toBe("from-networkfrom-network");
+      expect(fetchImpl).toHaveBeenCalledTimes(1);
+
+      const outside = await fetch("https://example.com/other");
+      expect(await outside.text()).toBe("from-network");
+      expect(fetchImpl).toHaveBeenCalledTimes(2);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it("reads each in-flight request cache from the request store", async () => {
+    const originalFetch = globalThis.fetch;
+    const fetchImpl = vi.fn(async () => new Response("from-network"));
+    globalThis.fetch = fetchImpl;
+
+    try {
+      const cacheA = new PrerenderCache();
+      await cacheA.fetch(
+        "https://example.com/a",
+        { cache: "force-cache" },
+        async () => new Response("A"),
+      );
+      const cacheB = new PrerenderCache();
+      await cacheB.fetch(
+        "https://example.com/b",
+        { cache: "force-cache" },
+        async () => new Response("B"),
+      );
+
+      const renderFor = (url: string, cache: PrerenderCache) =>
+        new Promise<string>((resolve, reject) => {
+          void runWithRequestContext(
+            new Request("https://example.com"),
+            () => {
+              queueMicrotask(async () => {
+                try {
+                  const response = await fetch(url, { cache: "force-cache" });
+                  resolve(await response.text());
+                } catch (error) {
+                  reject(error);
+                }
+              });
+            },
+            { cache },
+          );
+        });
+
+      const [textA, textB] = await Promise.all([
+        renderFor("https://example.com/a", cacheA),
+        renderFor("https://example.com/b", cacheB),
+      ]);
+
+      expect(textA).toBe("A");
+      expect(textB).toBe("B");
+      expect(fetchImpl).not.toHaveBeenCalled();
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
   });
 });
 
