@@ -20,6 +20,7 @@ import type { RscPayload, NliteHandlerEnv, PrerenderMeta } from "../types.js";
 import type { PostponedState } from "react-dom/static";
 import {
   NOT_FOUND_ROUTE_PATH,
+  NEXT_RESUME_HEADER,
   RESPONSE_STATUS_HEADER,
   RESUME_HEADER,
   STALE_TIME_HEADER,
@@ -489,7 +490,14 @@ function parseRenderRequest(request: Request, pathname = new URL(request.url).pa
 }
 
 function isResumeRequest(request: Request) {
-  return request.headers.get(RESUME_HEADER) === "1" && request.method === "POST";
+  if (request.method !== "POST") {
+    return false;
+  }
+
+  // Accept both nlite-local and Vercel CDN chain headers.
+  return (
+    request.headers.get(RESUME_HEADER) === "1" || request.headers.get(NEXT_RESUME_HEADER) === "1"
+  );
 }
 
 async function loadPrerenderMeta(request: Request) {
