@@ -1,13 +1,15 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
 
+import { META_POSTFIX } from "../../utils/constants.js";
+import { normalizeHtmlFilePath, normalizeRoutePath } from "../../utils/path.js";
 import {
   HTML_CONTENT_TYPE,
-  META_POSTFIX,
   NEXT_RESUME_HEADER,
+  PPR_EXPIRATION,
   PRE_RENDER_CONTENT_TYPE,
-} from "../utils/constants.js";
-import { normalizeHtmlFilePath, normalizeRoutePath } from "../utils/path.js";
+  RSC_CONTENT_TYPE,
+} from "./constants.js";
 
 export interface PartiallyStaticRoute {
   routePath: string;
@@ -22,13 +24,11 @@ export interface WrittenPprPrerender {
   prerenderPath: string;
   configPath: string;
   fallbackPath: string;
+  rscConfigPath: string;
+  rscFallbackPath: string;
   stateLength: number;
 }
 
-/**
- * Builds the content-type Vercel's CDN uses to split postponed state from the
- * HTML/RSC shell. `state-length` is a UTF-8 byte offset (not string length).
- */
 export function getPostponedStateContentType(
   postponedState: string,
   originContentType: string = HTML_CONTENT_TYPE,
@@ -38,7 +38,6 @@ export function getPostponedStateContentType(
   )}; origin=${JSON.stringify(originContentType)}`;
 }
 
-/** Map a route path to the Vercel functions pathname (`/` → `index`). */
 export function toVercelPrerenderPath(routePath: string): string {
   const normalized = normalizeRoutePath(routePath);
   if (normalized === "/") {
@@ -55,10 +54,6 @@ export function routePathFromMetaRelative(metaRelativePath: string): string {
   return normalizeRoutePath(`/${withoutMeta}`);
 }
 
-/**
- * Scan the client/static output for `.meta` files marked PARTIALLY_STATIC and
- * load the matching HTML shell + meta JSON (used as the opaque resume body).
- */
 export async function collectPartiallyStaticRoutes(
   staticDir: string,
 ): Promise<PartiallyStaticRoute[]> {
@@ -100,44 +95,61 @@ export async function collectPartiallyStaticRoutes(
   return routes.sort((a, b) => a.routePath.localeCompare(b.routePath));
 }
 
-/**
- * Emit a Vercel Build Output API v3 PPR prerender matching adapter-vercel:
- * - fallback body = postponedState (meta JSON) + HTML shell
- * - content-type = application/x-nextjs-pre-render; state-length=…; origin=…
- * - chain.headers.next-resume = 1 so the CDN POSTs the state prefix to the function
- */
 export async function writePprPrerender(options: {
   functionsDir: string;
   parentFunctionName: string;
   route: PartiallyStaticRoute;
   groupId: number;
   expiration?: number | false;
+  staleExpiration?: number;
 }): Promise<WrittenPprPrerender> {
-  const { functionsDir, parentFunctionName, route, groupId, expiration = false } = options;
+  const {
+    functionsDir,
+    parentFunctionName,
+    route,
+    groupId,
+    expiration = PPR_EXPIRATION,
+    staleExpiration,
+  } = options;
 
   const prerenderPath = toVercelPrerenderPath(route.routePath);
   const postponedState = route.metaText;
   const stateLength = Buffer.byteLength(postponedState);
+  const baseName = path.basename(prerenderPath);
 
-  const fallbackFileName = `${path.basename(prerenderPath)}.prerender-fallback.html`;
-  const configFileName = `${path.basename(prerenderPath)}.prerender-config.json`;
+  const fallbackFileName = `${baseName}.prerender-fallback.html`;
+  const configFileName = `${baseName}.prerender-config.json`;
+  const rscFallbackFileName = `${baseName}.rsc.prerender-fallback.rsc`;
+  const rscConfigFileName = `${baseName}.rsc.prerender-config.json`;
 
-  // Nested routes live in subdirectories: blog/post → functions/blog/post.*
   const outputDir = path.join(functionsDir, path.dirname(prerenderPath));
   await fs.mkdir(outputDir, { recursive: true });
 
   const fallbackPath = path.join(outputDir, fallbackFileName);
   const configPath = path.join(outputDir, configFileName);
-  const functionDir = path.join(functionsDir, `${prerenderPath}.func`);
+  const rscFallbackPath = path.join(outputDir, rscFallbackFileName);
+  const rscConfigPath = path.join(outputDir, rscConfigFileName);
   const parentFunctionDir = path.join(functionsDir, `${parentFunctionName}.func`);
 
   await fs.writeFile(fallbackPath, `${postponedState}${route.htmlText}`);
+  await fs.writeFile(rscFallbackPath, postponedState);
 
-  const config = {
-    expiration,
+  const shared = {
     group: groupId,
+    exposeErrBody: true,
+    expiration,
+    ...(staleExpiration !== undefined ? { staleExpiration } : {}),
+    sourcePath: route.routePath,
     passQuery: true,
     allowQuery: [] as string[],
+  };
+
+  const config = {
+    ...shared,
+    initialMetadata: {
+      compute: "resuming",
+      htmlSize: Buffer.byteLength(route.htmlText),
+    },
     initialStatus: 200,
     initialHeaders: {
       "content-type": getPostponedStateContentType(postponedState, HTML_CONTENT_TYPE),
@@ -147,30 +159,53 @@ export async function writePprPrerender(options: {
       headers: {
         [NEXT_RESUME_HEADER]: "1",
       },
-      // Keep the `./` prefix — matches adapter-vercel / Vercel CDN expectations.
-      outputPath: `./${prerenderPath}`,
+      outputPath: prerenderPath,
     },
   };
 
-  await fs.writeFile(configPath, `${JSON.stringify(config, null, 2)}\n`);
+  const rscConfig = {
+    ...shared,
+    initialHeaders: {
+      "content-type": getPostponedStateContentType(postponedState, RSC_CONTENT_TYPE),
+      "cache-control": "private, no-store, no-cache, max-age=0, must-revalidate",
+    },
+    fallback: rscFallbackFileName,
+    chain: {
+      headers: {
+        [NEXT_RESUME_HEADER]: "1",
+      },
+      outputPath: `${prerenderPath}.rsc`,
+    },
+  };
 
-  // Share the catch-all function code (same as adapter-vercel).
-  if (path.resolve(functionDir) !== path.resolve(parentFunctionDir)) {
-    await fs.mkdir(path.dirname(functionDir), { recursive: true });
-    await fs.rm(functionDir, { recursive: true, force: true });
-    await fs.symlink(path.relative(path.dirname(functionDir), parentFunctionDir), functionDir);
-  }
+  await Promise.all([
+    fs.writeFile(configPath, `${JSON.stringify(config, null, 2)}\n`),
+    fs.writeFile(rscConfigPath, `${JSON.stringify(rscConfig, null, 2)}\n`),
+    linkFunction(path.join(functionsDir, `${prerenderPath}.func`), parentFunctionDir),
+    linkFunction(path.join(functionsDir, `${prerenderPath}.rsc.func`), parentFunctionDir),
+  ]);
 
   return {
     routePath: route.routePath,
     prerenderPath,
     configPath,
     fallbackPath,
+    rscConfigPath,
+    rscFallbackPath,
     stateLength,
   };
 }
 
-/** Remove PPR shells from static so CDN serves the prerender primitive instead. */
+async function linkFunction(functionDir: string, parentFunctionDir: string) {
+  if (path.resolve(functionDir) === path.resolve(parentFunctionDir)) {
+    return;
+  }
+
+  await fs.mkdir(path.dirname(functionDir), { recursive: true });
+  await fs.rm(functionDir, { recursive: true, force: true });
+  await fs.symlink(path.relative(path.dirname(functionDir), parentFunctionDir), functionDir);
+}
+
 export async function removeStaticPprArtifacts(
   staticDir: string,
   route: PartiallyStaticRoute,

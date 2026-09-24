@@ -9,12 +9,8 @@ export const NOT_FOUND_ROUTE_PATH = "/_not-found";
 export const STALE_TIME_HEADER = "x-nlite-staletime";
 export const RESPONSE_STATUS_HEADER = "x-nlite-status";
 export const RESUME_HEADER = "x-nlite-resume";
-/** Vercel CDN PPR chain header (same wire as Next.js). */
-export const NEXT_RESUME_HEADER = "next-resume";
 export const RSC_POSTFIX = ".rsc";
 export const META_POSTFIX = ".meta";
-export const HTML_CONTENT_TYPE = "text/html; charset=utf-8";
-export const PRE_RENDER_CONTENT_TYPE = "application/x-nextjs-pre-render";
 
 const DEFAULT_STALE_TIMES = {
   static: 300,

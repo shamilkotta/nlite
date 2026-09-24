@@ -2,20 +2,17 @@ import { promises as fs } from "node:fs";
 import path from "node:path";
 import type { Plugin, PluginOption, ResolvedConfig } from "vite";
 
-import type { NliteOptions } from "../types.js";
-import { NOT_FOUND_RSC_FILE, resolveStaleTimes, STALE_TIME_HEADER } from "../utils/constants.js";
-import { tryCatch } from "../utils/index.js";
+import type { NliteOptions } from "../../types.js";
+import { NOT_FOUND_RSC_FILE, resolveStaleTimes, STALE_TIME_HEADER } from "../../utils/constants.js";
+import { tryCatch } from "../../utils/index.js";
+import { FUNCTION_NAME, SERVER_BUNDLE_DIR, VERCEL_OUTPUT_DIR } from "./constants.js";
 import {
   collectPartiallyStaticRoutes,
   removeStaticPprArtifacts,
   writePprPrerender,
-} from "./vercel-ppr.js";
+} from "./ppr.js";
 
 export interface VercelAdapterOptions {}
-
-const FUNCTION_NAME = "__nlite";
-const SERVER_BUNDLE_DIR = "server";
-const VERCEL_OUTPUT_DIR = ".vercel/output";
 
 export function vercel(_options: VercelAdapterOptions = {}): PluginOption[] {
   let config: ResolvedConfig;
@@ -53,18 +50,13 @@ export function vercel(_options: VercelAdapterOptions = {}): PluginOption[] {
       const runtime = "nodejs24.x";
       await writeVercelFunction(root, serverOutDir, runtime);
 
-      let pprCount = 0;
       if (nliteOptions.ppr) {
-        pprCount = await writePprPrerenders(staticDir, path.join(outputDir, "functions"));
+        await writePprPrerenders(staticDir, path.join(outputDir, "functions"));
       }
 
       await writeVercelConfig(root, staleTimes);
 
-      const pprNote =
-        pprCount > 0 ? ` (${pprCount} PPR prerender${pprCount === 1 ? "" : "s"})` : "";
-      config.logger.info(
-        `[nlite] Vercel build ready in ${path.relative(root, outputDir)}.${pprNote}`,
-      );
+      config.logger.info(`[nlite] Vercel build ready in ${path.relative(root, outputDir)}`);
     },
   };
 
@@ -84,7 +76,6 @@ async function writePprPrerenders(staticDir: string, functionsDir: string) {
       parentFunctionName: FUNCTION_NAME,
       route,
       groupId: groupId++,
-      expiration: false,
     });
     await removeStaticPprArtifacts(staticDir, route);
   }
@@ -114,9 +105,16 @@ const ASSETS = {
 
 export default {
   fetch(request, _env) {
-    return handler(request, { ..._env, ASSETS });
+    return handler(normalizeRootPath(request), { ..._env, ASSETS })
   },
 };
+
+function normalizeRootPath(request) {
+  const url = new URL(request.url);
+  if (url.pathname !== "/index") return request;
+  url.pathname = "/";
+  return new Request(url, request);
+}
 `;
 }
 
@@ -135,7 +133,11 @@ async function writeFunctionConfig(functionDir: string, runtime: string) {
         runtime,
         handler: "index.js",
         launcherType: "Nodejs",
+        // Page functions in adapter-vercel stream more than one payload (shell + resume).
+        supportsMultiPayloads: true,
         supportsResponseStreaming: true,
+        // Our entry is `export default { fetch }`, not Next's Node launcher.
+        useWebApi: true,
       },
       null,
       2,
@@ -161,6 +163,13 @@ async function writeVercelConfig(root: string, staleTimes: { static: number; dyn
           {
             src: "/(.*\\.rsc)",
             headers: { [STALE_TIME_HEADER]: String(staleTimes.static) },
+            continue: true,
+          },
+          // Root Flight URL is `/.rsc`. The prerender file is `index.rsc`,
+          // same as adapter-vercel.
+          {
+            src: "^/\\.rsc$",
+            dest: "/index.rsc",
             continue: true,
           },
           {
