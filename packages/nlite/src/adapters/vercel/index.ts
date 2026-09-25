@@ -2,18 +2,21 @@ import { promises as fs } from "node:fs";
 import path from "node:path";
 import type { Plugin, PluginOption, ResolvedConfig } from "vite";
 
-import type { NliteOptions } from "../types.js";
-import { NOT_FOUND_RSC_FILE, resolveStaleTimes, STALE_TIME_HEADER } from "../utils/constants.js";
-import { tryCatch } from "../utils/index.js";
+import type { NliteOptions } from "../../types.js";
+import { NOT_FOUND_RSC_FILE, resolveStaleTimes, STALE_TIME_HEADER } from "../../utils/constants.js";
+import { tryCatch } from "../../utils/index.js";
+import { FUNCTION_NAME, SERVER_BUNDLE_DIR, VERCEL_OUTPUT_DIR } from "./constants.js";
+import {
+  collectPartiallyStaticRoutes,
+  removeStaticPprArtifacts,
+  writePprPrerender,
+} from "./ppr.js";
 
 export interface VercelAdapterOptions {}
 
-const FUNCTION_NAME = "__nlite";
-const SERVER_BUNDLE_DIR = "server";
-const VERCEL_OUTPUT_DIR = ".vercel/output";
-
 export function vercel(_options: VercelAdapterOptions = {}): PluginOption[] {
   let config: ResolvedConfig;
+  let nliteOptions: NliteOptions = {};
   let staleTimes: { static: number; dynamic: number };
 
   const plugin: Plugin = {
@@ -25,9 +28,8 @@ export function vercel(_options: VercelAdapterOptions = {}): PluginOption[] {
     },
     configResolved(resolvedConfig) {
       config = resolvedConfig;
-      staleTimes = resolveStaleTimes(
-        (resolvedConfig as unknown as { nlite?: NliteOptions }).nlite?.staleTimes,
-      );
+      nliteOptions = (resolvedConfig as unknown as { nlite?: NliteOptions }).nlite ?? {};
+      staleTimes = resolveStaleTimes(nliteOptions.staleTimes);
     },
     async closeBundle() {
       const root = config.root;
@@ -42,16 +44,44 @@ export function vercel(_options: VercelAdapterOptions = {}): PluginOption[] {
       const outputDir = path.join(root, VERCEL_OUTPUT_DIR);
       await fs.rm(outputDir, { recursive: true, force: true });
 
-      await copyDir(clientOutDir, path.join(outputDir, "static"));
+      const staticDir = path.join(outputDir, "static");
+      await copyDir(clientOutDir, staticDir);
+
       const runtime = "nodejs24.x";
       await writeVercelFunction(root, serverOutDir, runtime);
+
+      if (nliteOptions.ppr) {
+        await writePprPrerenders(staticDir, path.join(outputDir, "functions"), staleTimes.dynamic);
+      }
+
       await writeVercelConfig(root, staleTimes);
 
-      config.logger.info(`[nlite] Vercel build ready in ${path.relative(root, outputDir)}.`);
+      config.logger.info(`[nlite] Vercel build ready in ${path.relative(root, outputDir)}`);
     },
   };
 
   return [plugin];
+}
+
+async function writePprPrerenders(staticDir: string, functionsDir: string, staleTime: number) {
+  const routes = await collectPartiallyStaticRoutes(staticDir);
+  if (routes.length === 0) {
+    return 0;
+  }
+
+  let groupId = 1;
+  for (const route of routes) {
+    await writePprPrerender({
+      functionsDir,
+      parentFunctionName: FUNCTION_NAME,
+      route,
+      groupId: groupId++,
+      staleTime,
+    });
+    await removeStaticPprArtifacts(staticDir, route);
+  }
+
+  return routes.length;
 }
 
 async function writeVercelFunction(root: string, serverOutDir: string, runtime: string) {
@@ -76,9 +106,16 @@ const ASSETS = {
 
 export default {
   fetch(request, _env) {
-    return handler(request, { ..._env, ASSETS });
+    return handler(normalizeRootPath(request), { ..._env, ASSETS })
   },
 };
+
+function normalizeRootPath(request) {
+  const url = new URL(request.url);
+  if (url.pathname !== "/index") return request;
+  url.pathname = "/";
+  return new Request(url, request);
+}
 `;
 }
 
@@ -98,6 +135,8 @@ async function writeFunctionConfig(functionDir: string, runtime: string) {
         handler: "index.js",
         launcherType: "Nodejs",
         supportsResponseStreaming: true,
+        supportsMultiPayloads: true,
+        useWebApi: true,
       },
       null,
       2,
