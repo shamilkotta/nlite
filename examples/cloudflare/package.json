@@ -6,7 +6,7 @@
     "dev": "nlite dev",
     "build": "nlite build",
     "preview": "nlite preview",
-    "deploy": "nlite build && wrangler deploy -c .nlite/server/wrangler.json && wrangler deploy -c .nlite/server/eyeball/wrangler.json"
+    "deploy": "nlite build && wrangler deploy -c .nlite/server/wrangler.json && wrangler deploy -c .nlite/eyeball/wrangler.json"
   },
   "dependencies": {
     "@cloudflare/vite-plugin": "^1.37.1",
