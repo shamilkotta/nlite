@@ -11,13 +11,14 @@ export const SCmp = async () => {
 };
 
 export const DynamicCmp = async () => {
-  const resp = await fetch("http://localhost:8000");
+  "use cache";
+  const resp = await fetch("https://example.com", { cache: "force-cache" });
   const data = await resp.text();
   return <h1>Hello "Dynamic Content" LEN: {data.length}</h1>;
 };
 
 export const DynamicCmp2 = async () => {
-  const resp = await fetch("http://localhost:8000", { cache: "force-cache" });
+  const resp = await fetch("https://example.com", { cache: "force-cache" });
   const data = await resp.text();
   return <h1>Hello "Dynamic Content" LEN: {data.length}</h1>;
 };

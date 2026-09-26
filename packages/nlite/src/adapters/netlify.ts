@@ -2,8 +2,9 @@ import { createRequire } from "node:module";
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import type { Logger, Plugin, PluginOption, ResolvedConfig } from "vite";
+import type { Logger, Plugin, PluginOption, ResolvedConfig, UserConfig } from "vite";
 
+import type { NliteOptions } from "../types.js";
 import { RSC_POSTFIX } from "../utils/constants.js";
 import { tryCatch } from "../utils/index.js";
 
@@ -24,6 +25,12 @@ export function netlify(_options: NetlifyAdapterOptions = {}): PluginOption[] {
     enforce: "post",
     applyToEnvironment(environment) {
       return environment.name === "api";
+    },
+    config(userConfig) {
+      const ppr = (userConfig as UserConfig & { nlite?: NliteOptions }).nlite?.ppr;
+      if (ppr) {
+        throw new Error("[nlite] PPR is not supported with the Netlify adapter.");
+      }
     },
     configResolved(resolvedConfig) {
       config = resolvedConfig;
