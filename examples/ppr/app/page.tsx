@@ -10,6 +10,7 @@ export default async function Page() {
     <main className="main">
       <h1>Home</h1>
       <Link href="/about">About Page</Link>
+      <Link href="/contact">Contact Page</Link>
       <p className="muted">
         Static home route — no request APIs. The status timestamp below is from build output when
         prerendered.
