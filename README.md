@@ -2,16 +2,17 @@
 
 `nlite` is a small experimental React framework built on Vite and React Server Components.
 
-This is a curiosity driven side project for learning how RSC, streaming SSR, static generation, file based routing, and deployment adapters can fit together on top of Vite.
+This is a curiosity driven side project for learning how partial pre-rendering, RSC, streaming SSR, static generation, and filebased routeing can fit together on top of Vite.
 
 ## What It Does
 
 - Uses React 19 and `@vitejs/plugin-rsc`.
 - Provides file based routing from an `app` directory.
 - Supports layouts, pages, loading UI, error UI, dynamic routes, and API routes.
+- Includes support for Partial Pre-Rendering (PPR), allowing you to combine static and dynamic content on the same page.
 - Includes streaming SSR and static generation experiments.
 - Exposes a small CLI: `nlite dev`, `nlite build`, `nlite preview`, and `nlite start`.
-- Includes deployment adapter experiments for Cloudflare, Netlify, and Vercel.
+- Includes first-party deployment adapter experiments for Cloudflare, Netlify, and Vercel.
 
 ## What It Is Not
 
