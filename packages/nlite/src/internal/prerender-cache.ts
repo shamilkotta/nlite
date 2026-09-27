@@ -131,7 +131,8 @@ export class PrerenderCache {
         return signal ? signal.track(hit) : hit;
       }
 
-      const read = originalFetch(prepared.input, prepared.init).then(async (response) => ({
+      const network = stripPrerenderCacheMode(prepared.input, prepared.init);
+      const read = originalFetch(network.input, network.init).then(async (response) => ({
         response,
         serialized: await serializeResponse(response.clone()),
       }));
@@ -153,7 +154,8 @@ export class PrerenderCache {
         return (await existing).response.clone();
       }
 
-      const read = originalFetch(prepared.input, prepared.init).then(async (response) => ({
+      const network = stripPrerenderCacheMode(prepared.input, prepared.init);
+      const read = originalFetch(network.input, network.init).then(async (response) => ({
         response,
         serialized: await serializeResponse(response.clone()),
       }));
@@ -376,6 +378,49 @@ function resolveFetchCacheInputs(input: RequestInfo | URL, init: RequestInit | u
     : ((resolvedInit ?? {}) as CacheKeyInit);
 
   return { resolvedInput, resolvedInit, isRequestInput, url, keyInit };
+}
+
+/**
+ * Strip `force-cache` / `only-if-cached` before the underlying fetch.
+ * PrerenderCache owns those semantics;
+ */
+function stripPrerenderCacheMode(
+  input: RequestInfo | URL,
+  init: RequestInit | undefined,
+): { input: RequestInfo | URL; init: RequestInit | undefined } {
+  let nextInit = init;
+  if (nextInit?.cache === "force-cache" || nextInit?.cache === "only-if-cached") {
+    const { cache: _cache, ...rest } = nextInit;
+    nextInit = Object.keys(rest).length > 0 ? rest : undefined;
+  }
+
+  if (
+    typeof input === "object" &&
+    input !== null &&
+    "cache" in input &&
+    (input.cache === "force-cache" || input.cache === "only-if-cached")
+  ) {
+    const request = input as Request;
+    return {
+      input: new Request(request.url, {
+        method: request.method,
+        headers: request.headers,
+        body: request.body,
+        credentials: request.credentials,
+        integrity: request.integrity,
+        keepalive: request.keepalive,
+        mode: request.mode,
+        redirect: request.redirect,
+        referrer: request.referrer,
+        referrerPolicy: request.referrerPolicy,
+        signal: request.signal,
+        ...(request.body ? { duplex: "half" } : {}),
+      } as RequestInit),
+      init: nextInit,
+    };
+  }
+
+  return { input, init: nextInit };
 }
 
 function finishPreparedFetch(

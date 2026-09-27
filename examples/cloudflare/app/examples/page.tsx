@@ -57,6 +57,10 @@ export default function Page() {
           <Link href="/examples/server-fetch">server-fetch</Link>
           <span className="muted"> — uncached fetch() → auto SSR</span>
         </li>
+        <li>
+          <Link href="/examples/ppr">ppr</Link>
+          <span className="muted"> — eyeball shell + Smart Placement resume</span>
+        </li>
       </ul>
 
       <p>

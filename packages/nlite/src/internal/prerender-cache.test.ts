@@ -3,6 +3,19 @@ import { CacheSignal, PrerenderCache } from "./prerender-cache.js";
 import { runWithRequestContext } from "./request-context.js";
 
 describe("PrerenderCache", () => {
+  it("strips force-cache before calling the underlying fetch", async () => {
+    const fetchImpl = vi.fn(async (_input, init?: RequestInit) => {
+      expect(init?.cache).toBeUndefined();
+      return new Response("ok");
+    });
+    const cache = new PrerenderCache();
+
+    await cache.fetch("https://example.com/data", { cache: "force-cache" }, fetchImpl);
+
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+    expect(fetchImpl.mock.calls[0]?.[1]).toBeUndefined();
+  });
+
   it("shares cacheable responses across renders and serialization", async () => {
     const fetchImpl = vi.fn(async () => Response.json({ value: 42 }, { status: 201 }));
     const cache = new PrerenderCache();
