@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { rmSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -56,6 +57,9 @@ export function nlite(options: NliteOptions = {}): PluginOption[] {
     },
     configResolved(config) {
       projectRoot = config.root;
+      if (config.command === "build") {
+        rmSync(path.join(projectRoot, ".nlite"), { recursive: true, force: true });
+      }
     },
     configEnvironment(name, config) {
       if (isProductionBuild && (name === "ssr" || name === "rsc")) {

@@ -1,4 +1,4 @@
-import { promises as fs } from "node:fs";
+import { promises as fs, rmSync } from "node:fs";
 import path from "node:path";
 import type { Plugin, PluginOption, ResolvedConfig } from "vite";
 
@@ -30,6 +30,7 @@ export function vercel(_options: VercelAdapterOptions = {}): PluginOption[] {
       config = resolvedConfig;
       nliteOptions = (resolvedConfig as unknown as { nlite?: NliteOptions }).nlite ?? {};
       staleTimes = resolveStaleTimes(nliteOptions.staleTimes);
+      rmSync(path.join(resolvedConfig.root, VERCEL_OUTPUT_DIR), { recursive: true, force: true });
     },
     async closeBundle() {
       const root = config.root;
