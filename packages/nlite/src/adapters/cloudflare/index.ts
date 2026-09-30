@@ -20,7 +20,7 @@ export async function cloudflare(options: CloudflareAdapterOptions = {}): Promis
 
   const distRoot = path.dirname(fileURLToPath(import.meta.url));
   const rscEntryPath = path.join(distRoot, "modules", "entry.rsc");
-  const eyeballEntryPath = path.join(distRoot, "adapters", "cloudflare", "entry.eyeball");
+  const edgeEntryPath = path.join(distRoot, "adapters", "cloudflare", "entry.edge");
   const placement = options.placement ?? { mode: "smart" as const };
 
   const pluginConfig: PluginConfig = {
@@ -52,11 +52,11 @@ export async function cloudflare(options: CloudflareAdapterOptions = {}): Promis
         const publicWorkerName = readWranglerConfig(userWranglerPath)?.name ?? "nlite";
         const originServiceName = `${publicWorkerName}-origin`;
 
-        pluginConfig.configPath = writeEyeballStub(userWranglerPath);
-        pluginConfig.viteEnvironment = { name: "eyeball" };
+        pluginConfig.configPath = writeEdgeStub(userWranglerPath);
+        pluginConfig.viteEnvironment = { name: "edge" };
         pluginConfig.config = () => ({
           name: publicWorkerName,
-          main: eyeballEntryPath,
+          main: edgeEntryPath,
           workers_dev: true,
           assets: {
             binding: ASSETS_BINDING,
@@ -100,9 +100,9 @@ export async function cloudflare(options: CloudflareAdapterOptions = {}): Promis
 
         return {
           environments: {
-            eyeball: {
+            edge: {
               build: {
-                outDir: ".nlite/eyeball",
+                outDir: ".nlite/edge",
               },
             },
           },
@@ -113,8 +113,8 @@ export async function cloudflare(options: CloudflareAdapterOptions = {}): Promis
   ];
 }
 
-function writeEyeballStub(userWranglerPath: string) {
-  const dir = mkdtempSync(path.join(tmpdir(), "nlite-eyeball-"));
+function writeEdgeStub(userWranglerPath: string) {
+  const dir = mkdtempSync(path.join(tmpdir(), "nlite-edge-"));
   const stubPath = path.join(dir, "wrangler.json");
   writeFileSync(
     stubPath,
