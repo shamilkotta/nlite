@@ -14,6 +14,8 @@ import {
   NETLIFY_EDGE_FUNCTIONS_DIR,
   NETLIFY_FUNCTIONS_DIR,
   NETLIFY_OUTPUT_DIR,
+  ORIGIN_PATH,
+  ORIGIN_URL_HEADER,
   REDIRECTS_GENERATED_MARKER,
   ROOT_RSC_ALIAS,
 } from "./constants.js";
@@ -116,7 +118,6 @@ export const config = {
       config = resolvedConfig;
       nliteOptions = (resolvedConfig as unknown as { nlite?: NliteOptions }).nlite ?? {};
       ppr = Boolean(nliteOptions.ppr);
-      rmSync(path.join(resolvedConfig.root, NETLIFY_OUTPUT_DIR), { recursive: true, force: true });
     },
     buildApp: {
       async handler(builder) {
@@ -128,6 +129,11 @@ export const config = {
         if (!edgeEnvironment) {
           throw new Error("[nlite] Netlify edge environment was not configured for PPR.");
         }
+
+        rmSync(path.join(builder.config.root, NETLIFY_OUTPUT_DIR), {
+          recursive: true,
+          force: true,
+        });
 
         await builder.build(edgeEnvironment);
       },
@@ -147,6 +153,14 @@ export const config = {
       }
 
       const clientOutDir = path.resolve(root, config.environments.client.build.outDir);
+
+      // Drop stale edge outputs.
+      if (!ppr) {
+        rmSync(path.join(root, NETLIFY_EDGE_FUNCTIONS_DIR), {
+          recursive: true,
+          force: true,
+        });
+      }
 
       await Promise.all([
         writeNetlifyFunction(root, serverOutDir),
@@ -223,14 +237,28 @@ const ASSETS = {
   fetch,
 };
 
-export default async (request, _env) => handler(request, { ..._env, ASSETS });
+const ORIGIN_URL_HEADER = ${JSON.stringify(ORIGIN_URL_HEADER)};
+
+function restoreOriginRequest(request) {
+  const originPathname = request.headers.get(ORIGIN_URL_HEADER);
+  if (!originPathname) {
+    return request;
+  }
+  const url = new URL(request.url);
+  url.pathname = originPathname;
+
+  return new Request(url, request);
+}
+
+export default async (request, _env) =>
+  handler(restoreOriginRequest(request), { ..._env, ASSETS });
 
 export const config = {
   name: "nlite server",
   generator: ${JSON.stringify(generator)},
-  path: "/*",
-  excludedPath: "/.netlify/*",
+  path: ["/*", ${JSON.stringify(ORIGIN_PATH)}],
   preferStatic: true,
+  excludedPath: ["/*.meta", "/*.html"], // TODO: need revisit here, check entry.edge.ts:57
   includedFiles: [${JSON.stringify(`${NETLIFY_FUNCTIONS_DIR}/${FUNCTION_NAME}/**`)}],
 };
 `;

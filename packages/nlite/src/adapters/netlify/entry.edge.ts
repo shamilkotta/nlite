@@ -5,6 +5,7 @@ import {
   normalizeRoutePath,
 } from "../../utils/path.js";
 import { RESUME_HEADER, RSC_POSTFIX, STALE_TIME_HEADER } from "../../utils/constants.js";
+import { ORIGIN_PATH, ORIGIN_URL_HEADER } from "./constants.js";
 
 interface PrerenderMetaFile {
   renderingMode?: string;
@@ -13,7 +14,7 @@ interface PrerenderMetaFile {
 
 export default async function nliteEdge(request: Request, context: Context) {
   if (request.headers.get(RESUME_HEADER) === "1") {
-    return context.next(request); // TODO: this should go to ORIGIN
+    return callOrigin(request);
   }
 
   if (request.method === "GET" || request.method === "HEAD") {
@@ -21,14 +22,34 @@ export default async function nliteEdge(request: Request, context: Context) {
     if (stitched) {
       return stitched;
     }
-
-    const assetResponse = await context.next(request);
-    if (assetResponse.status !== 404) {
-      return assetResponse;
-    }
   }
 
-  return context.next(request); // TODO: this should go to ORIGIN
+  return context.next(request);
+}
+
+function callOrigin(request: Request): Promise<Response> {
+  const url = new URL(request.url);
+  url.pathname = ORIGIN_PATH;
+
+  const headers = new Headers();
+  request.headers.forEach((value, name) => {
+    if (HOP_BY_HOP_HEADERS.has(name.toLowerCase())) {
+      return;
+    }
+    headers.set(name, value);
+  });
+  headers.set(ORIGIN_URL_HEADER, new URL(request.url).pathname);
+  headers.delete("content-length");
+
+  const method = request.method;
+  const body = method === "GET" || method === "HEAD" ? undefined : request.body;
+  const originRequest = new Request(url, {
+    method,
+    headers,
+    body,
+  });
+
+  return fetch(originRequest);
 }
 
 async function tryPprStitch(request: Request, context: Context) {
@@ -38,7 +59,13 @@ async function tryPprStitch(request: Request, context: Context) {
   }
 
   const routePath = routePathFromUrl(url.pathname);
-  const metaResponse = await context.next(assetRequest(request, metaAssetPath(routePath)));
+  /**
+   * TODO:
+   * This should have been a direct static asset fetch like we did for cloudflare (ASSSETS.fetch()).
+   * rn we're excluding the /*.meta and /*.html from origin function to avoid reaching origin handler.
+   * but i suspect still this cause origin round trip if the meta file is not present.
+   */
+  const metaResponse = await context.next(assetRequest(request, metaAssetPath(routePath))); // TODO: direct static asset fetch here
   if (!metaResponse.ok) {
     return null;
   }
@@ -58,14 +85,14 @@ async function tryPprStitch(request: Request, context: Context) {
   const isRsc = url.pathname.endsWith(RSC_POSTFIX) || url.pathname === "/_rsc";
 
   if (isRsc) {
-    return context.next(createResumeRequest(request, metaText)); // TODO: this should go to ORIGIN
+    return callOrigin(createResumeRequest(request, metaText));
   }
 
   const shellResponse = await context.next(
     assetRequest(request, `/${normalizeHtmlFilePath(routePath)}`),
-  );
+  ); // TODO: direct static asset fetch here
   if (!shellResponse.ok || !shellResponse.body) {
-    return context.next(request); // TODO: this should go to ORIGIN
+    return callOrigin(request);
   }
 
   if (request.method === "HEAD") {
@@ -75,7 +102,7 @@ async function tryPprStitch(request: Request, context: Context) {
     });
   }
 
-  const resumePromise = context.next(createResumeRequest(request, metaText)); // TODO: this should go to ORIGIN
+  const resumePromise = callOrigin(createResumeRequest(request, metaText));
   const body = concatStreams(shellResponse.body, async () => {
     const resumeResponse = await resumePromise;
     if (!resumeResponse.ok || !resumeResponse.body) {
