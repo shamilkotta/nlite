@@ -20,7 +20,8 @@ export default defineConfig((_opt): UserConfig[] => [
       "lib/redirect-boundary": "./src/lib/redirect-boundary.tsx",
       "modules/*": "./src/modules/*.ts",
       adapters: "./src/adapters/index.ts",
-      "adapters/cloudflare/entry.eyeball": "./src/adapters/cloudflare/entry.eyeball.ts",
+      "adapters/cloudflare/entry.edge": "./src/adapters/cloudflare/entry.edge.ts",
+      "adapters/netlify/entry.edge": "./src/adapters/netlify/entry.edge.ts",
     },
     dts: true,
     deps: {
