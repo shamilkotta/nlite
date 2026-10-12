@@ -1,17 +1,40 @@
 # nlite
 
-`nlite` is a React 19 framework on Vite for server-rendered apps with React Server Components, streaming SSR, static generation, and Partial Prerendering (PPR).
+**A React Server Components framework built on Vite.** nlite gives you App Router–style file-based routing, streaming SSR, static site generation, and Partial Prerendering (PPR) on React 19 and Vite 8, with deployment adapters for Vercel, Cloudflare Workers, and Netlify.
 
-> `nlite` is experimental and not fully tested across edge cases. Public APIs may change between releases.
+[![npm version](https://img.shields.io/npm/v/nlite.svg)](https://www.npmjs.com/package/nlite)
+[![license](https://img.shields.io/npm/l/nlite.svg)](https://github.com/shamilkotta/nlite/blob/main/LICENSE)
+[![GitHub](https://img.shields.io/badge/GitHub-shamilkotta%2Fnlite-181717.svg?logo=github)](https://github.com/shamilkotta/nlite)
+
+> nlite is an experimental project. Public APIs may change between releases.
 
 ## Features
 
 - App-directory routing with layouts, pages, loading UI, error UI, and not-found UI
 - Static generation, request-time SSR, and PPR in the same route tree
+- `"use cache"` for build-time cached server work
 - Route handlers for HTTP endpoints
 - Request helpers for cookies, headers, redirects, and not-found responses
 - Client navigation with `Link` and router hooks
+- Metadata API and MDX content collections
 - Deployment adapters for Vercel, Cloudflare Workers, and Netlify
+
+## Contents
+
+- [Quick Start](#quick-start)
+- [CLI](#cli)
+- [Routing](#routing)
+- [Rendering](#rendering)
+- [Partial Prerendering](#partial-prerendering)
+- [Route Handlers](#route-handlers)
+- [Request Data](#request-data)
+- [Navigation](#navigation)
+- [Metadata](#metadata)
+- [MDX Content](#mdx-content)
+- [Configuration](#configuration)
+- [Deployment](#deployment)
+- [Examples](#examples)
+- [FAQ](#faq)
 
 ## Requirements
 
@@ -332,6 +355,36 @@ export async function generateMetadata({
 }
 ```
 
+## MDX Content
+
+Load Markdown and MDX files as typed content collections. Install the optional peers first:
+
+```bash
+pnpm add -D @mdx-js/rollup gray-matter
+```
+
+```ts
+// nlite.config.ts
+import { defineConfig } from "nlite/config";
+import { defineCollection, mdx } from "nlite/mdx";
+import { z } from "zod";
+
+export default defineConfig({
+  plugins: [
+    mdx({
+      collections: {
+        blog: defineCollection({
+          source: "content/blog/**/*.{md,mdx}",
+          schema: z.object({ title: z.string(), publishedAt: z.coerce.date() }),
+        }),
+      },
+    }),
+  ],
+});
+```
+
+Read entries from server components with `getCollection(name)` and `getEntry(name, slug)` from `nlite/mdx`.
+
 ## Configuration
 
 `defineConfig` accepts framework options, deploy/build plugins, and Vite config.
@@ -385,11 +438,12 @@ export default defineConfig({
 
 // Netlify: pnpm add -D netlify
 export default defineConfig({
+  ppr: true,
   plugins: [netlify()],
 });
 ```
 
-Build with the configured adapter:
+Build with the configured adapter, or build and deploy in one step:
 
 ```bash
 pnpm nlite build
@@ -402,6 +456,7 @@ Working examples are in [`examples`](https://github.com/shamilkotta/nlite/tree/m
 - `examples/basic`
 - `examples/ppr`
 - `examples/cloudflare`
+- `examples/netlify`
 
 From a checkout:
 
@@ -410,6 +465,11 @@ pnpm install
 pnpm --filter nlite build
 pnpm --filter example-basic dev
 ```
+
+## Links
+
+- [GitHub repository](https://github.com/shamilkotta/nlite)
+- [Issues](https://github.com/shamilkotta/nlite/issues)
 
 ## License
 

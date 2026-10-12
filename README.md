@@ -1,121 +1,124 @@
 # nlite
 
-`nlite` is a small experimental React framework built on Vite and React Server Components.
+**A React Server Components framework built on Vite.** File-based routing, streaming SSR, static generation, and Partial Prerendering (PPR) in a small, readable codebase, with adapters for Vercel, Cloudflare Workers, and Netlify.
 
-This is a curiosity driven side project for learning how partial pre-rendering, RSC, streaming SSR, static generation, and filebased routeing can fit together on top of Vite.
-
-## What It Does
-
-- Uses React 19 and `@vitejs/plugin-rsc`.
-- Provides file based routing from an `app` directory.
-- Supports layouts, pages, loading UI, error UI, dynamic routes, and API routes.
-- Includes support for Partial Pre-Rendering (PPR), allowing you to combine static and dynamic content on the same page.
-- Includes streaming SSR and static generation experiments.
-- Exposes a small CLI: `nlite dev`, `nlite build`, `nlite preview`, and `nlite start`.
-- Includes first-party deployment adapter experiments for Cloudflare, Netlify, and Vercel.
-
-## What It Is Not
-
-- Not stable.
-- Not production ready.
-- Not a Next.js replacement.
-- Not guaranteed to keep the same APIs.
-- Not thoroughly tested across every edge case.
-
-Use it to read, experiment, break things, and understand the moving parts.
-
-## Repo Layout
-
-- `packages/nlite` - the framework package and CLI.
-- `examples/*` - a minimal examples.
-
-## Requirements
-
-- Node.js compatible with Vite 8 and React 19.
-- pnpm.
-
-## Install
-
-```bash
-pnpm install
-```
-
-Build the package:
-
-```bash
-pnpm nlite build
-```
-
-## Run Examples
-
-Basic example:
-
-```bash
-pnpm --filter example-basic dev
-pnpm --filter example-basic build
-pnpm --filter example-basic preview
-```
-
-Deployment example (Cloudflare):
-
-```bash
-pnpm --filter example-cloudflare dev
-pnpm --filter example-cloudflare build
-pnpm --filter example-cloudflare preview
-pnpm --filter example-cloudflare deploy
-```
-
-See [`packages/nlite/README.md`](packages/nlite/README.md#deployment) for Netlify and Vercel adapter setup.
-
-## Package Usage
-
-Inside an app:
+[![npm version](https://img.shields.io/npm/v/nlite.svg)](https://www.npmjs.com/package/nlite)
+[![license](https://img.shields.io/npm/l/nlite.svg)](LICENSE)
+[![React 19](https://img.shields.io/badge/React-19-61dafb.svg)](https://react.dev)
+[![Vite 8](https://img.shields.io/badge/Vite-8-646cff.svg)](https://vite.dev)
 
 ```bash
 pnpm add nlite react react-dom
 ```
 
-Add scripts:
+> nlite is an experimental, learning-driven project. APIs may change between releases.
 
-```json
-{
-  "scripts": {
-    "dev": "nlite dev",
-    "build": "nlite build",
-    "preview": "nlite preview"
-  }
+## What is nlite?
+
+nlite is a React 19 meta-framework that uses [`@vitejs/plugin-rsc`](https://github.com/vitejs/vite-plugin-react/tree/main/packages/plugin-rsc) to bring an App Router–style developer experience to Vite. If you know Next.js's `app` directory, you already know how nlite works: `layout.tsx`, `page.tsx`, `loading.tsx`, `error.tsx`, and `route.ts`.
+
+The goal is to show how React Server Components, streaming SSR, static generation, and Partial Prerendering fit together, in a codebase small enough to read in an afternoon.
+
+## Features
+
+- **React Server Components** on React 19 and Vite 8
+- **File-based routing** from an `app` directory: nested layouts, dynamic `[id]` and catch-all `[...slug]` segments, route groups, and loading, error, and not-found UI
+- **Streaming SSR** with Suspense
+- **Static site generation (SSG)** with `generateStaticParams`
+- **Partial Prerendering (PPR)**: a static shell with dynamic holes resumed at request time
+- **`"use cache"`** for build-time cached server work
+- **Route handlers** (`route.ts`) for API endpoints using standard `Request`/`Response`
+- **Client navigation** with `Link`, prefetching, and `useRouter` / `usePathname` / `useSearchParams`
+- **Metadata API** with `metadata` and `generateMetadata`
+- **MDX content collections** with schema validation
+- **Deployment adapters** for Vercel, Cloudflare Workers, and Netlify
+- **Small CLI**: `nlite dev`, `build`, `preview`, `start`, and `deploy`
+
+## Quick start
+
+```ts
+// nlite.config.ts
+import { defineConfig } from "nlite/config";
+
+export default defineConfig({ ppr: true });
+```
+
+```tsx
+// app/layout.tsx
+export default function RootLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <html lang="en">
+      <body>{children}</body>
+    </html>
+  );
 }
 ```
 
-Create `nlite.config.ts`:
+```tsx
+// app/page.tsx
+import { Suspense } from "react";
+import { cookies } from "nlite/headers";
 
-```ts
-import { defineConfig } from "nlite/config";
+export default function Page() {
+  return (
+    <main>
+      <h1>Static shell, prerendered at build time</h1>
+      <Suspense fallback={<p>Loading…</p>}>
+        <Greeting />
+      </Suspense>
+    </main>
+  );
+}
 
-export default defineConfig({});
+async function Greeting() {
+  const name = (await cookies()).get("name")?.value ?? "stranger";
+  return <p>Hello, {name}. This part is rendered per request.</p>;
+}
 ```
 
-Create routes inside `app`:
+```bash
+npx nlite dev
+```
+
+Full API reference: [`packages/nlite/README.md`](packages/nlite/README.md).
+
+## Examples
+
+| Example                                      | Shows                                  |
+| -------------------------------------------- | -------------------------------------- |
+| [`examples/basic`](examples/basic)           | Routing, layouts, MDX blog, API routes |
+| [`examples/ppr`](examples/ppr)               | Partial Prerendering and `"use cache"` |
+| [`examples/cloudflare`](examples/cloudflare) | Cloudflare Workers deployment          |
+| [`examples/netlify`](examples/netlify)       | Netlify deployment                     |
+
+```bash
+pnpm install
+pnpm --filter nlite build
+pnpm --filter example-basic dev
+```
+
+## Repository layout
 
 ```txt
-app/
-  layout.tsx
-  page.tsx
-  api/status/route.ts
+packages/nlite   framework package and CLI (published to npm as `nlite`)
+examples/*       example apps
+docs/            architecture notes and roadmap
+tests/           integration tests
 ```
-
-More package-level notes are in [`packages/nlite/README.md`](packages/nlite/README.md).
 
 ## Development
 
 ```bash
-pnpm nlite dev          # watch package build
-pnpm nlite build        # build package
-pnpm lint               # oxlint
-pnpm format             # oxfmt
-pnpm test               # vitest
+pnpm install
+pnpm nlite dev      # watch-build the package
+pnpm nlite build    # build the package
+pnpm test           # vitest
+pnpm lint           # oxlint
+pnpm format         # oxfmt
 ```
+
+Issues and pull requests are welcome. See the [Code of Conduct](CODE_OF_CONDUCT.md).
 
 ## License
 
-MIT
+[MIT](LICENSE) © [Shamil](https://github.com/shamilkotta)
