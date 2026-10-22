@@ -1,12 +1,16 @@
 # nlite
 
-**A React Server Components framework built on Vite.** nlite gives you App Router–style file-based routing, streaming SSR, static site generation, and Partial Prerendering (PPR) on React 19 and Vite 8, with deployment adapters for Vercel, Cloudflare Workers, and Netlify.
+**nlite is a lightweight React 19 framework on Vite with Next.js-style `app/` routing.** It gives you layouts, loading and error UI, route handlers, streaming SSR, static site generation, and Partial Prerendering (PPR) on React 19 and Vite 8, with deployment adapters for Vercel, Cloudflare Workers, and Netlify.
 
 [![npm version](https://img.shields.io/npm/v/nlite.svg)](https://www.npmjs.com/package/nlite)
 [![license](https://img.shields.io/npm/l/nlite.svg)](https://github.com/shamilkotta/nlite/blob/main/LICENSE)
 [![GitHub](https://img.shields.io/badge/GitHub-shamilkotta%2Fnlite-181717.svg?logo=github)](https://github.com/shamilkotta/nlite)
 
-> nlite is an experimental project. Public APIs may change between releases.
+> nlite is experimental. It is usable for side projects and small sites, but public APIs may change between releases.
+
+Project page: https://shamilkotta.com/projects/nlite
+
+**Who it's for:** people who like the Next.js `app` directory conventions and want them on Vite, with React Server Components, SSR, SSG, and PPR in a small codebase. It is a lite alternative, not a drop-in replacement for Next.js. See [FAQ](#faq) and [Limitations](#limitations).
 
 ## Features
 
@@ -34,7 +38,7 @@
 - [Configuration](#configuration)
 - [Deployment](#deployment)
 - [Examples](#examples)
-- [FAQ](#faq)
+- [Limitations](#limitations)
 
 ## Requirements
 
@@ -48,6 +52,8 @@ Install the package:
 
 ```bash
 pnpm add nlite react react-dom
+# or
+npm i nlite react react-dom
 ```
 
 Add scripts:
@@ -109,7 +115,7 @@ pnpm dev
 ```bash
 nlite dev       # start the development server
 nlite build     # create a production build in .nlite
-nlite preview   # serve the production build locally
+nlite preview   # serve the production build
 nlite start     # alias for preview
 ```
 
@@ -418,7 +424,7 @@ Production builds write to `.nlite`. Public environment variables must use the `
 
 ## Deployment
 
-Choose one deployment adapter in `nlite.config.ts`:
+`nlite build` writes to `.nlite`, and `nlite start` serves the output. Add an adapter in `nlite.config.ts` to build for a platform instead:
 
 ```ts
 import { cloudflare, netlify, vercel } from "nlite/adapters";
@@ -443,11 +449,18 @@ export default defineConfig({
 });
 ```
 
-Build with the configured adapter, or build and deploy in one step:
+Build with the configured adapter, then deploy the output with the platform CLI:
 
 ```bash
 pnpm nlite build
 ```
+
+| Adapter        | Output              |
+| -------------- | ------------------- |
+| `vercel()`     | `.nlite`,`.vercel`  |
+| `cloudflare()` | `.nlite`,           |
+| `netlify()`    | `.nlite`,`.netlify` |
+|                | `.nlite`            |
 
 ## Examples
 
@@ -466,8 +479,16 @@ pnpm --filter nlite build
 pnpm --filter example-basic dev
 ```
 
+## Limitations
+
+- Experimental. Public APIs can change between minor releases.
+- Server Actions (`"use server"`) are not wired up at the framework level yet.
+- No middleware, image optimization, or font optimization.
+- No ISR or on-demand revalidation. `"use cache"` caches at build time.
+
 ## Links
 
+- [Project page](https://shamilkotta.com/projects/nlite)
 - [GitHub repository](https://github.com/shamilkotta/nlite)
 - [Issues](https://github.com/shamilkotta/nlite/issues)
 

@@ -61,11 +61,14 @@ export function createRouteElement(
     searchParams: trackedSearchParams,
   });
 
+  const rootSegment = route.tree[0];
+
   for (const segment of [...route.tree].reverse()) {
-    if (segment.notFound) {
+    // The root segment always gets a not-found boundary, falling back to the default UI
+    if (segment.notFound || segment === rootSegment) {
       element = React.createElement(NotFoundBoundary, {
         children: element,
-        notFound: React.createElement(segment.notFound.default),
+        notFound: React.createElement(segment.notFound?.default ?? DefaultNotFoundElement),
       });
     }
     if (segment.loading) {

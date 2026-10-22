@@ -220,17 +220,24 @@ async function finalizeRenderResponse(
     "ssr",
     "index",
   );
-  const { stream: htmlStream, status: renderStatus } = await ssrEntry.renderHtml(rscStream, {
+  const {
+    stream: htmlStream,
+    status: renderStatus,
+    redirect,
+  } = await ssrEntry.renderHtml(rscStream, {
     ssg: false,
     url: options.renderRequest.url,
   });
 
+  const headers: Record<string, string> = {
+    "content-type": "text/html;charset=utf-8",
+    [STALE_TIME_HEADER]: String(__NLITE_STALE_TIMES__.dynamic),
+  };
+  if (redirect) headers.location = redirect.url;
+
   return new Response(htmlStream, {
-    status: renderStatus ?? httpStatus,
-    headers: {
-      "content-type": "text/html;charset=utf-8",
-      [STALE_TIME_HEADER]: String(__NLITE_STALE_TIMES__.dynamic),
-    },
+    status: redirect?.status ?? renderStatus ?? httpStatus,
+    headers,
   });
 }
 

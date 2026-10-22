@@ -8,6 +8,7 @@ import { suppressStreamClose, teeRscStream } from "../utils/stream.js";
 import { runInSequentialTasks } from "../utils/scheduler.js";
 import { runWithNavigationUrl } from "../internal/navigation-context.js";
 import {
+  getRedirectStatusCodeFromError,
   getURLFromRedirectError,
   isNliteRouterError,
   isNotFoundError,
@@ -58,6 +59,7 @@ export async function renderHtml(
 
   let htmlStream: ReadableStream<Uint8Array>;
   let postponed: PostponedState | null = null;
+  let redirect: { url: string; status: number } | undefined;
   let status: number | undefined;
   if (_options?.ssg) {
     const controller = new AbortController();
@@ -117,7 +119,7 @@ export async function renderHtml(
         }),
       );
     } catch (error) {
-      ({ stream: htmlStream, status } = await renderError(error, bootstrapScriptContent));
+      ({ stream: htmlStream, status, redirect } = await renderError(error, bootstrapScriptContent));
     }
   }
 
@@ -125,13 +127,19 @@ export async function renderHtml(
   if (rscForBrowser) {
     responseStream = responseStream.pipeThrough(injectRSCPayload(rscForBrowser));
   }
-  return { stream: responseStream, status, postponed };
+  return { stream: responseStream, status, postponed, redirect };
 }
 
 async function renderError(error: unknown, bootstrapScriptContent: string) {
   let htmlStream: ReadableStream<Uint8Array>;
   let status: number | undefined;
+  let redirect: { url: string; status: number } | undefined;
   if (isRedirectError(error)) {
+    // Shell failed before any bytes were sent, so the caller can respond with a real HTTP redirect
+    redirect = {
+      url: getURLFromRedirectError(error),
+      status: getRedirectStatusCodeFromError(error),
+    };
     htmlStream = await renderNavigationShell(bootstrapScriptContent, [
       createElement("title", null, "Redirecting..."),
       createElement("meta", {
@@ -165,7 +173,7 @@ async function renderError(error: unknown, bootstrapScriptContent: string) {
     );
   }
 
-  return { stream: htmlStream, status };
+  return { stream: htmlStream, status, redirect };
 }
 
 function createSsrRoot(rscStream: ReadableStream) {
