@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { clientOutputExists, readClientOutput, readJsonOutput, useFixture } from "../harness/fixture.js";
+import {
+  clientOutputExists,
+  readClientOutput,
+  readJsonOutput,
+  useFixture,
+} from "../harness/fixture.js";
 import { textById } from "../harness/html.js";
 import { expectDynamic, expectStatic, html } from "../harness/render.js";
 import { useUpstream } from "../harness/upstream.js";
@@ -130,7 +135,7 @@ describe("static generation (automatic)", () => {
 
     // Known bug: vite's static server has no MIME type for `.rsc`, so prerendered payloads
     // go out with an empty Content-Type while on-demand payloads use text/x-component.
-    it.fails("serves static RSC payloads as text/x-component", async () => {
+    it("serves static RSC payloads as text/x-component", async () => {
       const response = await app.fetch("/about/team.rsc");
       expect(response.headers.get("content-type")).toMatch(/^text\/x-component/);
     });

@@ -11,6 +11,9 @@ export default function Page() {
       <Link id="keep-scroll-to-b" href="/b" scroll={false} prefetch={false}>
         b (keep scroll)
       </Link>
+      <Link id="keep-scroll-to-tall" href="/tall" scroll={false} prefetch={false}>
+        tall (keep scroll)
+      </Link>
     </main>
   );
 }

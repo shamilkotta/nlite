@@ -45,6 +45,8 @@ function withNlitePlugin(config: NliteUserConfig) {
   const { plugins: vitePlugins = [], ...viteConfig } = vite ?? {};
 
   return mergeConfig(viteConfig, {
+    // Set by the e2e harness so parallel fixtures do not share one optimizer cache.
+    ...(process.env.NLITE_VITE_CACHE_DIR ? { cacheDir: process.env.NLITE_VITE_CACHE_DIR } : {}),
     nlite: nliteOptions,
     customLogger,
     build: {

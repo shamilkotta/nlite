@@ -14,5 +14,8 @@ export const PATCH = echo;
 export const DELETE = echo;
 
 export function OPTIONS() {
-  return new Response(null, { status: 204, headers: { allow: "POST, PUT, PATCH, DELETE, OPTIONS" } });
+  return new Response(null, {
+    status: 204,
+    headers: { allow: "POST, PUT, PATCH, DELETE, OPTIONS" },
+  });
 }

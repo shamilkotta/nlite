@@ -125,7 +125,7 @@ describe("generateStaticParams", () => {
 
     // Known bug: the file is written as `hello%20world.html`, but the preview server decodes the
     // request path before looking it up, so the prerendered page is never served.
-    it.fails("serves the prerendered file for an encoded param", async () => {
+    it("serves the prerendered file for an encoded param", async () => {
       const response = await app.fetch("/encoded/hello%20world");
       expectStatic(response);
     });

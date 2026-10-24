@@ -41,9 +41,15 @@ describe("client components and hydration", () => {
       );
     });
 
-    it("renders navigation hooks with the request URL", async () => {
+    // During SSR usePathname() returns "/" for every route (useSearchParams() is right),
+    // so the pathname changes after hydration.
+    it("renders usePathname() with the request path", async () => {
       const body = await html(await app.fetch("/hooks?q=ssr"));
       expect(textById(body, "pathname")).toBe("/hooks");
+    });
+
+    it("renders useSearchParams() with the request query", async () => {
+      const body = await html(await app.fetch("/hooks?q=ssr"));
       expect(textById(body, "search-q")).toBe("ssr");
     });
   });

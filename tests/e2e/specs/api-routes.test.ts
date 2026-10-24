@@ -16,24 +16,27 @@ describe("route handlers (route.ts)", () => {
       expect(await response.json()).toEqual({ message: "hello" });
     });
 
-    it.each(["POST", "PUT", "PATCH", "DELETE"])("handles %s with the request body", async (method) => {
-      const response = await app.fetch("/api/echo?page=2", {
-        method,
-        headers: { "x-e2e-tag": "tagged" },
-        body: `${method} body`,
-      });
-      expect(response.status).toBe(200);
-      expect(await response.json()).toEqual({
-        method,
-        body: `${method} body`,
-        query: { page: "2" },
-        header: "tagged",
-      });
-    });
+    it.each(["POST", "PUT", "PATCH", "DELETE"])(
+      "handles %s with the request body",
+      async (method) => {
+        const response = await app.fetch("/api/echo?page=2", {
+          method,
+          headers: { "x-e2e-tag": "tagged" },
+          body: `${method} body`,
+        });
+        expect(response.status).toBe(200);
+        expect(await response.json()).toEqual({
+          method,
+          body: `${method} body`,
+          query: { page: "2" },
+          header: "tagged",
+        });
+      },
+    );
 
     // Known issue: Vite's preview server answers every OPTIONS request with its CORS
     // middleware before nlite sees it, so an exported OPTIONS handler never runs there.
-    it.fails("handles OPTIONS", async () => {
+    it("handles OPTIONS", async () => {
       const response = await app.fetch("/api/echo", { method: "OPTIONS" });
       expect(response.status).toBe(204);
       expect(response.headers.get("allow")).toBe("POST, PUT, PATCH, DELETE, OPTIONS");

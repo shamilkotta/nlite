@@ -5,7 +5,9 @@
 
 /** Text content of the first element with `id`, or `undefined` when it is absent. */
 export function textById(html: string, id: string) {
-  const pattern = new RegExp(`<([a-zA-Z0-9]+)[^>]*\\sid="${escapeRegex(id)}"[^>]*>([\\s\\S]*?)</\\1>`);
+  const pattern = new RegExp(
+    `<([a-zA-Z0-9]+)[^>]*\\sid="${escapeRegex(id)}"[^>]*>([\\s\\S]*?)</\\1>`,
+  );
   const match = html.match(pattern);
   return match ? toText(match[2]!) : undefined;
 }
@@ -25,7 +27,9 @@ export function hasId(html: string, id: string) {
 
 /** The document `<title>` set from metadata (React renders exactly one). */
 export function titleOf(html: string) {
-  const titles = [...html.matchAll(/<title>([\s\S]*?)<\/title>/g)].map((match) => toText(match[1]!));
+  const titles = [...html.matchAll(/<title>([\s\S]*?)<\/title>/g)].map((match) =>
+    toText(match[1]!),
+  );
   return titles.filter(Boolean).at(-1) ?? "";
 }
 

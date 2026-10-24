@@ -11,28 +11,24 @@ const FIXTURE = "search-params";
  * forwards `onRejected` to the inner promise. When `markDynamicUsage()` rejects during
  * prerendering, `await searchParams` never settles and the rejection is unhandled, which crashes
  * the prerender worker and fails `nlite build` (with or without PPR).
- *
- * The build is attempted at collection time so the preview tests below run automatically once
- * the bug is fixed; until then they are skipped and the two `it.fails` tests document the crash.
  */
 const build = await buildFixture(FIXTURE);
-const buildSucceeds = build.code === 0;
 
 describe("searchParams", () => {
   describe("build", () => {
-    it.fails("builds an app whose page awaits searchParams", () => {
+    it("builds an app whose page awaits searchParams", () => {
       expect(build.output).not.toContain("DynamicPrerenderUsageError");
       expect(build.code).toBe(0);
     });
 
-    it.fails("builds a PPR app whose Suspense boundary awaits searchParams", async () => {
+    it("builds a PPR app whose Suspense boundary awaits searchParams", async () => {
       const pprBuild = await buildFixture("search-params-ppr");
       expect(pprBuild.output).not.toContain("DynamicPrerenderUsageError");
       expect(pprBuild.code).toBe(0);
     });
   });
 
-  describe.runIf(buildSucceeds)("production (preview)", () => {
+  describe("production (preview)", () => {
     let app: RunningServer;
     beforeAll(async () => {
       app = await startServer(FIXTURE, "preview");

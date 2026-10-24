@@ -14,7 +14,8 @@
     "format:check": "oxfmt . --check",
     "test": "vitest run",
     "test:watch": "vitest",
-    "nlite": "pnpm --filter nlite"
+    "nlite": "pnpm --filter nlite",
+    "test:e2e": "pnpm --filter nlite-e2e test"
   },
   "devDependencies": {
     "oxfmt": "^0.45.0",

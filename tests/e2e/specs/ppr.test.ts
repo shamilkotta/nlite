@@ -106,7 +106,9 @@ describe("partial prerendering", () => {
     });
 
     it("renders a page that reads request data outside Suspense entirely per request", async () => {
-      const first = await html(await app.fetch("/no-suspense", { headers: { cookie: "user=ada" } }));
+      const first = await html(
+        await app.fetch("/no-suspense", { headers: { cookie: "user=ada" } }),
+      );
       const second = await html(await app.fetch("/no-suspense"));
       expect(textById(first, "user")).toBe("ada");
       expect(textById(second, "user")).toBe("anonymous");

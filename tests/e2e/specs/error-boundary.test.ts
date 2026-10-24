@@ -37,7 +37,7 @@ describe("error boundaries (error.tsx)", () => {
 
     // Known issue: the RSC error digest is the raw `error.message`, so server-side error
     // messages (which may contain secrets) are sent to the client.
-    it.fails("does not leak server error messages to the client", async () => {
+    it("does not leak server error messages to the client", async () => {
       const html = await (await app.fetch("/secret")).text();
       const rsc = await (await app.fetch("/secret.rsc")).text();
       expect(html).not.toContain("SUPER_SECRET_VALUE_123");
