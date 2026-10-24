@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { useBrowser } from "../harness/browser.js";
 import { clientOutputExists, readClientOutput, useFixture } from "../harness/fixture.js";
-import { hasId, metaContent, textById, titleOf, withoutFlight } from "../harness/html.js";
+import { metaContent, textById, titleOf, withoutFlight } from "../harness/html.js";
 import { html } from "../harness/render.js";
 
 const FIXTURE = "not-found";
@@ -38,7 +38,7 @@ describe("not found", () => {
 
     // Known issue: when notFound() is thrown, SSR falls back to an empty document and the
     // not-found.tsx UI only appears after hydration, so it is missing without JavaScript.
-    it.fails("includes the segment's not-found.tsx in the server HTML", async () => {
+    it("includes the segment's not-found.tsx in the server HTML", async () => {
       const body = withoutFlight(await html(await app.fetch("/shop/sandal")));
       expect(textById(body, "shop-not-found")).toBe("This product does not exist");
     });
@@ -81,7 +81,7 @@ describe("not found", () => {
 
     // Known issue: the preview server serves `_not-found.html` for `/_not-found` like any
     // other prerendered page, so the internal route answers 200.
-    it.fails("does not expose the internal not-found route", async () => {
+    it("does not expose the internal not-found route", async () => {
       const response = await app.fetch("/_not-found");
       expect(response.status).toBe(404);
     });
@@ -94,7 +94,7 @@ describe("not found", () => {
 
     // Known bug: the prerendered not-found document is served as a regular static file,
     // so a static page that calls notFound() answers 200 instead of 404.
-    it.fails("responds 404 for a static page that calls notFound()", async () => {
+    it("responds 404 for a static page that calls notFound()", async () => {
       const response = await app.fetch("/static-missing");
       expect(response.status).toBe(404);
     });
@@ -110,7 +110,7 @@ describe("not found", () => {
 
       // Known issue: hydration re-renders the document head from the route's metadata, so the
       // "404" title from the server response is replaced with the route's (empty) title.
-      it.fails("keeps the 404 title after hydration", async () => {
+      it("keeps the 404 title after hydration", async () => {
         const { page } = await browser.open(app.url("/shop/sandal"));
         await page.locator("#shop-not-found").waitFor();
         expect(await page.title()).toBe("404: This page could not be found");

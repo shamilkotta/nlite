@@ -1,0 +1,5 @@
+{
+  "name": "nlite-e2e-cloudflare-ssr",
+  "compatibility_date": "2026-05-17",
+  "compatibility_flags": ["nodejs_compat"],
+}

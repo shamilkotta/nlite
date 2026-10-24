@@ -29,7 +29,10 @@ export function useBrowser() {
   });
 
   return {
-    async open(url: string, options: { cookies?: Record<string, string> } = {}): Promise<BrowserPage> {
+    async open(
+      url: string,
+      options: { cookies?: Record<string, string> } = {},
+    ): Promise<BrowserPage> {
       const context = await browser!.newContext();
       contexts.push(context);
 

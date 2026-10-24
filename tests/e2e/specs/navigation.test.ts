@@ -85,21 +85,24 @@ describe("client navigation (Link and useRouter)", () => {
       expect(rscRequests()).toEqual(expect.not.arrayContaining(["/.rsc"]));
     });
 
-    it("scrolls to the top after navigating, unless scroll={false}", async () => {
+    it("scrolls to the top after navigating", async () => {
       const { page } = await browser.open(app.url("/scroll"));
       await page.locator("#scroll-to-a").scrollIntoViewIfNeeded();
       expect(await page.evaluate(() => window.scrollY)).toBeGreaterThan(0);
       await page.locator("#scroll-to-a").click();
       await page.locator("#page-a").waitFor();
       await page.waitForFunction(() => window.scrollY === 0);
+    });
 
-      await page.goto(app.url("/scroll"));
-      await page.locator("#keep-scroll-to-b").scrollIntoViewIfNeeded();
+    it("keeps the scroll position with scroll={false}", async () => {
+      const { page } = await browser.open(app.url("/scroll"));
+      await page.locator("#keep-scroll-to-tall").scrollIntoViewIfNeeded();
       const scrolled = await page.evaluate(() => window.scrollY);
-      await page.locator("#keep-scroll-to-b").click();
-      await page.locator("#page-b").waitFor();
-      expect(await page.evaluate(() => window.scrollY)).toBeGreaterThan(0);
       expect(scrolled).toBeGreaterThan(0);
+      await page.locator("#keep-scroll-to-tall").click();
+      await page.locator("#page-tall").waitFor();
+      await page.waitForTimeout(100);
+      expect(await page.evaluate(() => window.scrollY)).toBe(scrolled);
     });
   });
 

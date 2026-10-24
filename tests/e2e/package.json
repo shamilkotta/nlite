@@ -1,0 +1,23 @@
+{
+  "name": "nlite-e2e",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "vitest run --config vitest.config.ts"
+  },
+  "dependencies": {
+    "nlite": "workspace:*",
+    "react": "^19.2.5",
+    "react-dom": "^19.2.5"
+  },
+  "devDependencies": {
+    "@cloudflare/vite-plugin": "^1.37.1",
+    "@types/node": "^24.8.1",
+    "@types/react": "^19.2.2",
+    "@types/react-dom": "^19.2.2",
+    "playwright": "^1.56.0",
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.4",
+    "wrangler": "^4.92.0"
+  }
+}

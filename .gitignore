@@ -2,3 +2,15 @@ node_modules
 .DS_Store
 dist
 .output
+.netlify
+.nlite
+scripts
+/assets
+/docs
+tests/e2e/.logs
+tests/e2e/fixtures/**/.vite
+tests/e2e/**/node_modules
+tests/e2e/fixtures/**/package.json
+.wrangler
+.vercel
+tests/e2e/fixtures/**/netlify.toml

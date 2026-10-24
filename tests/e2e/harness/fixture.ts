@@ -36,7 +36,10 @@ export function fixtureDir(name: string) {
 }
 
 /** Runs `nlite build` inside a fixture and resolves with its exit code and combined output. */
-export async function buildFixture(name: string, options: FixtureOptions = {}): Promise<BuildResult> {
+export async function buildFixture(
+  name: string,
+  options: FixtureOptions = {},
+): Promise<BuildResult> {
   const cwd = fixtureDir(name);
   const logFile = logPath(name, "build");
   const child = spawnNlite(["build"], cwd, options.env, logFile);
@@ -56,29 +59,43 @@ export async function startServer(
   options: FixtureOptions = {},
 ): Promise<RunningServer> {
   const cwd = fixtureDir(name);
-  const port = await getFreePort();
-  const logFile = logPath(name, mode);
-  const child = spawnNlite(
-    [mode, "--port", String(port), "--strictPort", "--host", "127.0.0.1"],
-    cwd,
-    options.env,
-    logFile,
-  );
+  let lastError: Error | undefined;
 
-  let output = "";
-  child.stdout?.on("data", (chunk) => (output += chunk));
-  child.stderr?.on("data", (chunk) => (output += chunk));
+  // Another worker can bind the probed port before Vite does. `--strictPort` then exits;
+  // try again instead of talking to whichever server won the port.
+  for (let attempt = 1; attempt <= 5; attempt++) {
+    const port = await getFreePort();
+    const logFile = logPath(name, mode);
+    const child = spawnNlite(
+      [mode, "--port", String(port), "--strictPort", "--host", "127.0.0.1"],
+      cwd,
+      options.env,
+      logFile,
+    );
 
-  const origin = `http://127.0.0.1:${port}`;
-  await waitForServer(origin, child, () => output);
+    let output = "";
+    child.stdout?.on("data", (chunk) => (output += chunk));
+    child.stderr?.on("data", (chunk) => (output += chunk));
 
-  return {
-    origin,
-    url: (pathname) => new URL(pathname, origin).href,
-    fetch: (pathname, init) => fetch(new URL(pathname, origin), { redirect: "manual", ...init }),
-    logs: () => stripAnsi(output),
-    close: () => killProcessTree(child),
-  };
+    const origin = `http://127.0.0.1:${port}`;
+    try {
+      await waitForServer(origin, child, () => output);
+      return {
+        origin,
+        url: (pathname) => new URL(pathname, origin).href,
+        fetch: (pathname, init) =>
+          fetch(new URL(pathname, origin), { redirect: "manual", ...init }),
+        logs: () => stripAnsi(output),
+        close: () => killProcessTree(child),
+      };
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error(String(error));
+      await killProcessTree(child);
+      if (!isPortConflict(output) || attempt === 5) throw lastError;
+    }
+  }
+
+  throw lastError;
 }
 
 /**
@@ -145,7 +162,15 @@ function spawnNlite(
     cwd,
     // Own process group, so the vite process spawned by the nlite CLI is killed with it.
     detached: true,
-    env: { ...process.env, NODE_ENV: undefined, FORCE_COLOR: "0", ...env },
+    env: {
+      ...process.env,
+      NODE_ENV: undefined,
+      FORCE_COLOR: "0",
+      // Each fixture/command gets its own optimizer cache. Sharing tests/e2e/node_modules/.vite
+      // across parallel Vite processes corrupts prebundles and surfaces as random 500s.
+      NLITE_VITE_CACHE_DIR: path.join(cwd, ".vite", args[0] ?? "vite"),
+      ...env,
+    },
     stdio: ["ignore", "pipe", "pipe"],
   });
 
@@ -163,20 +188,35 @@ async function waitForServer(origin: string, child: ChildProcess, output: () => 
   child.once("exit", () => (exited = true));
 
   while (Date.now() < deadline) {
+    const logs = stripAnsi(output());
     if (exited) {
-      throw new Error(`Server exited before it was ready:\n${stripAnsi(output())}`);
+      throw new Error(`Server exited before it was ready:\n${logs}`);
     }
 
-    try {
-      await fetch(origin, { redirect: "manual", signal: AbortSignal.timeout(2_000) });
-      return;
-    } catch {
-      await new Promise((resolve) => setTimeout(resolve, 150));
+    // Any HTTP response is not enough: the port may still belong to another worker, and the
+    // first answer from our own server may be a 500 while Vite is still compiling.
+    if (logs.includes(origin)) {
+      try {
+        const response = await fetch(origin, {
+          redirect: "manual",
+          signal: AbortSignal.timeout(10_000),
+        });
+        await response.arrayBuffer();
+        if (response.status < 500) return;
+      } catch {
+        // Not accepting connections yet, or the probe timed out mid-compile.
+      }
     }
+
+    await new Promise((resolve) => setTimeout(resolve, 150));
   }
 
   await killProcessTree(child);
   throw new Error(`Server at ${origin} did not start within 60s:\n${stripAnsi(output())}`);
+}
+
+function isPortConflict(output: string) {
+  return /already in use|EADDRINUSE/i.test(stripAnsi(output));
 }
 
 async function killProcessTree(child: ChildProcess) {
