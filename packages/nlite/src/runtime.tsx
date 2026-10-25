@@ -15,7 +15,7 @@ import type {
   RouteParams,
 } from "./types.js";
 import { DefaultNotFoundElement } from "./utils/elements/not-found.js";
-import { DefaultRootLayout } from "./utils/elements/document.js";
+import { DefaultRootLayout } from "./utils/elements/root-layout.js";
 import { resolveRouteMetadata } from "./utils/metadata/index.js";
 
 export type { NliteRouteMatch, NliteRouteRecord, RenderingMode, RouteParams };

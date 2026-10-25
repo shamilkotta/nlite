@@ -1,4 +1,4 @@
-import React, { type PropsWithChildren, type ReactNode } from "react";
+import React, { type ReactNode } from "react";
 
 import { styles } from "virtual:nlite/assets";
 
@@ -37,9 +37,4 @@ export function ShellDocument({ headExtras }: { headExtras?: ReactNode }) {
     ),
     React.createElement("body"),
   );
-}
-
-/** Fallback used only when a route has no root layout at all */
-export function DefaultRootLayout({ children }: PropsWithChildren) {
-  return React.createElement("html", { lang: "en" }, React.createElement("body", null, children));
 }
