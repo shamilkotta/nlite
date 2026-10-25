@@ -3,7 +3,8 @@ import React, { createElement } from "react";
 import { renderToReadableStream, resume } from "react-dom/server.edge";
 import { prerender } from "react-dom/static.edge";
 import type { RscPayload } from "../types.js";
-import { Document } from "../utils/elements/document.js";
+import { scripts } from "virtual:nlite/assets";
+import { AppHead, ShellDocument } from "../utils/elements/document.js";
 import { suppressStreamClose, teeRscStream } from "../utils/stream.js";
 import { runInSequentialTasks } from "../utils/scheduler.js";
 import { runWithNavigationUrl } from "../internal/navigation-context.js";
@@ -180,7 +181,8 @@ function createSsrRoot(rscStream: ReadableStream) {
   const payload = createFromReadableStream<RscPayload>(rscStream);
   function SsrRoot() {
     const { root, metadata } = React.use(payload);
-    return createElement(Document, { metadata, children: root });
+    // Head nodes are hoisted by React into the <head> rendered by the user's root layout
+    return createElement(React.Fragment, null, createElement(AppHead, { metadata }), root);
   }
 
   return createElement(SsrRoot);
@@ -202,10 +204,7 @@ async function prerenderNavigationShell(bootstrapScriptContent: string, metadata
 }
 
 function createNavigationShell(headExtras: React.ReactNode) {
-  return createElement(Document, {
-    metadata: {},
-    headExtras,
-  });
+  return createElement(ShellDocument, { headExtras });
 }
 
 if (import.meta.hot) {
@@ -226,10 +225,15 @@ function injectRSCPayload(rscStream: ReadableStream<Uint8Array>) {
 
   let buffered: Uint8Array[] = [];
   let timeout: ReturnType<typeof setTimeout> | null = null;
+  let checkedDocument = !import.meta.env.DEV;
 
   function flushBufferedChunks(controller: TransformStreamDefaultController<Uint8Array>) {
     for (const chunk of buffered) {
       let text = decoder.decode(chunk, { stream: true });
+      if (!checkedDocument) {
+        checkedDocument = true;
+        warnIfMissingDocument(text);
+      }
       if (text.endsWith(trailer)) {
         text = text.slice(0, -trailer.length);
       }
@@ -302,6 +306,12 @@ async function writeRSCStream(
   const decoder = new TextDecoder();
   const reader = rscStream.getReader();
 
+  // The flight reader must exist before the first chunk is pushed. It is sent with the HTML only,
+  // never as part of the RSC payload.
+  if (scripts) {
+    controller.enqueue(encoder.encode(`<script src="${scripts}"></script>`));
+  }
+
   while (true) {
     const { done, value } = await reader.read();
     if (done) {
@@ -328,6 +338,14 @@ async function writeRSCStream(
           serializeInlineScriptValue(chunk) +
           ")</script>",
       ),
+    );
+  }
+}
+
+function warnIfMissingDocument(html: string) {
+  if (!/<html[\s>]/i.test(html) || !/<body[\s>]/i.test(html)) {
+    console.warn(
+      "[nlite] The root layout must render <html> and <body> tags. Wrap `children` in app/layout.tsx with <html><body>…</body></html>.",
     );
   }
 }

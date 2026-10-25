@@ -1,4 +1,4 @@
-import { access } from "node:fs/promises";
+import { access, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 import { FILE_EXTENSIONS } from "./constants.js";
@@ -18,6 +18,8 @@ export interface RouteModuleFiles {
 export interface DiscoveredRoute extends RouteModuleFiles {
   id: string;
   routePath: string;
+  /** Project-relative path of the root layout, the first layout above the page */
+  rootLayout?: string;
 }
 
 export interface DiscoveredApiRoute {
@@ -40,11 +42,14 @@ export async function discoverRoutes(projectRoot: string, appDir = "app") {
     const pageDir = path.dirname(pageFile);
     const tree = await collectTree(appRoot, pageDir);
 
+    const rootLayoutFile = tree.find((segment) => segment.layout)?.layout;
+
     routes.push({
       id: toPosix(path.relative(projectRoot, pageFile)),
       routePath: toRoutePath(appRoot, pageFile),
       page: pageFile,
       tree,
+      rootLayout: rootLayoutFile ? toPosix(path.relative(projectRoot, rootLayoutFile)) : undefined,
     });
   }
 
@@ -80,6 +85,47 @@ export async function discoverApiRoutes(projectRoot: string, appDir = "app") {
   }
 
   return routes.sort((left, right) => scoreRoute(right.routePath) - scoreRoute(left.routePath));
+}
+
+export const DEFAULT_ROOT_LAYOUT = `export default function RootLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <html lang="en">
+      <body>{children}</body>
+    </html>
+  );
+}
+`;
+
+/**
+ * Every page needs a root layout rendering <html> and <body>. In dev a missing one is generated
+ * at `app/layout.tsx` (like Next.js); in a build it is an error.
+ */
+export async function ensureRootLayouts(
+  routes: DiscoveredRoute[],
+  projectRoot: string,
+  appDir: string,
+  mode: "dev" | "build",
+) {
+  const missing = routes.filter((route) => !route.rootLayout);
+  if (missing.length === 0) {
+    return false;
+  }
+
+  const appRoot = path.resolve(projectRoot, appDir);
+  const pages = missing.map((route) => toPosix(path.relative(projectRoot, route.page)));
+
+  if (mode === "build") {
+    throw new Error(
+      `[nlite] Missing root layout for: ${pages.join(", ")}. Add ${toPosix(path.join(appDir, "layout.tsx"))} rendering <html> and <body>.`,
+    );
+  }
+
+  const layoutFile = path.join(appRoot, "layout.tsx");
+  await writeFile(layoutFile, DEFAULT_ROOT_LAYOUT, { flag: "wx" }).catch(() => undefined);
+  console.warn(
+    `[nlite] ${pages.join(", ")} did not have a root layout, so one was created at ${toPosix(path.relative(projectRoot, layoutFile))}`,
+  );
+  return true;
 }
 
 async function collectTree(appRoot: string, pageDir: string) {

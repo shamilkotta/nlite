@@ -18,7 +18,7 @@ import {
 import { api } from "./api.js";
 import { assets } from "./assets.js";
 import { resolveStaleTimes } from "../utils/constants.js";
-import { discoverRoutes } from "../utils/fs-routes.js";
+import { discoverRoutes, ensureRootLayouts } from "../utils/fs-routes.js";
 import { prerender } from "./prerender.js";
 import type { NliteOptions } from "../types.js";
 
@@ -36,6 +36,7 @@ export function nlite(options: NliteOptions = {}): PluginOption[] {
   const appDir = options.appDir ?? "app";
   let projectRoot = process.cwd();
   let isProductionBuild = false;
+  let command: ConfigEnv["command"] = "serve";
 
   const __dirname = path.dirname(fileURLToPath(import.meta.url));
   const runtimeId = path.join(__dirname, "runtime.mjs");
@@ -49,6 +50,7 @@ export function nlite(options: NliteOptions = {}): PluginOption[] {
     },
     config(_config, env: ConfigEnv) {
       isProductionBuild = env.command === "build" && env.mode === "production";
+      command = env.command;
       return {
         define: {
           __NLITE_STALE_TIMES__: JSON.stringify(resolveStaleTimes(options.staleTimes)),
@@ -102,7 +104,11 @@ export function nlite(options: NliteOptions = {}): PluginOption[] {
     },
     async load(id) {
       if (id === RESOLVED_MANIFEST_ID) {
-        const routes = await discoverRoutes(projectRoot, appDir);
+        let routes = await discoverRoutes(projectRoot, appDir);
+        const mode = command === "build" ? "build" : "dev";
+        if (await ensureRootLayouts(routes, projectRoot, appDir, mode)) {
+          routes = await discoverRoutes(projectRoot, appDir);
+        }
         return buildManifestModule(routes);
       }
 
@@ -280,6 +286,7 @@ function buildManifestModule(routes: Awaited<ReturnType<typeof discoverRoutes>>)
   id: ${JSON.stringify(route.id)},
   routePath: ${JSON.stringify(route.routePath)},
   sourceFile: ${JSON.stringify(route.page)},
+  rootLayout: ${JSON.stringify(route.rootLayout)},
   page: ${pageVar},
   tree: [
     ${treeRecord}

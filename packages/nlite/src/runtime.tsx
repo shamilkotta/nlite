@@ -15,6 +15,7 @@ import type {
   RouteParams,
 } from "./types.js";
 import { DefaultNotFoundElement } from "./utils/elements/not-found.js";
+import { DefaultRootLayout } from "./utils/elements/document.js";
 import { resolveRouteMetadata } from "./utils/metadata/index.js";
 
 export type { NliteRouteMatch, NliteRouteRecord, RenderingMode, RouteParams };
@@ -25,6 +26,7 @@ export function createRouteRecord(input: {
   sourceFile: string;
   page: NlitePageModule;
   tree: NliteRouteSegmentModule[];
+  rootLayout?: string;
 }): NliteRouteRecord {
   const rendering = input.page.rendering;
   const { regex, paramNames } = compileRoutePath(input.routePath);
@@ -56,16 +58,93 @@ export function createRouteElement(
   searchParams: URLSearchParams = new URLSearchParams(),
 ): React.ReactElement {
   const trackedSearchParams = trackSearchParams(searchParams);
-  let element: React.ReactElement = React.createElement(route.page.default, {
+  const page = React.createElement(route.page.default, {
     params: Promise.resolve(params),
     searchParams: trackedSearchParams,
   });
 
-  const rootSegment = route.tree[0];
+  return wrapSegments(route.tree, route.tree.length - 1, page, params, true);
+}
 
-  for (const segment of [...route.tree].reverse()) {
-    // The root segment always gets a not-found boundary, falling back to the default UI
-    if (segment.notFound || segment === rootSegment) {
+export function createRouteNotFoundElement(
+  route: NliteRouteRecord,
+  params: RouteParams,
+  searchParams: URLSearchParams = new URLSearchParams(),
+): React.ReactElement {
+  let notFoundSegmentIndex = -1;
+
+  for (let index = route.tree.length - 1; index >= 0; index -= 1) {
+    if (route.tree[index]?.notFound) {
+      notFoundSegmentIndex = index;
+      break;
+    }
+  }
+
+  if (notFoundSegmentIndex === -1) {
+    return createGlobalNotFoundElement([route], searchParams);
+  }
+
+  const notFoundModule = route.tree[notFoundSegmentIndex]!.notFound!;
+  // The not-found UI replaces its own segment's boundary, so wrapping starts with that segment's
+  // loading/error/layout only
+  return wrapSegments(
+    route.tree,
+    notFoundSegmentIndex,
+    React.createElement(notFoundModule.default),
+    params,
+    false,
+  );
+}
+
+export function createGlobalNotFoundElement(
+  routes: NliteRouteRecord[],
+  _searchParams: URLSearchParams = new URLSearchParams(),
+): React.ReactElement {
+  const rootRoute = routes.find((route) => route.routePath === "/") ?? routes[0];
+  const tree = rootRoute?.tree ?? [];
+  const rootIndex = Math.max(getRootLayoutIndex(tree), 0);
+  const notFoundModule = tree[rootIndex]?.notFound;
+
+  return wrapSegments(
+    tree.slice(0, rootIndex + 1),
+    rootIndex,
+    React.createElement(notFoundModule?.default ?? DefaultNotFoundElement),
+    {},
+    false,
+  );
+}
+
+/**
+ * Index of the segment whose layout is the root layout (the one rendering `<html>` and `<body>`).
+ * With route groups an app can have several root layouts, so this is the first segment that has
+ * a layout rather than always `tree[0]`.
+ */
+export function getRootLayoutIndex(tree: NliteRouteSegmentModule[]) {
+  return tree.findIndex((segment) => segment.layout);
+}
+
+function wrapSegments(
+  tree: NliteRouteSegmentModule[],
+  fromIndex: number,
+  element: React.ReactElement,
+  params: RouteParams,
+  includeOwnNotFound: boolean,
+): React.ReactElement {
+  const resolvedParams = Promise.resolve(params);
+  const rootIndex = getRootLayoutIndex(tree);
+  const boundaryRootIndex = Math.max(rootIndex, 0);
+
+  for (let index = fromIndex; index >= 0; index -= 1) {
+    const segment = tree[index]!;
+
+    // Boundaries above the root layout would render outside <html>, so they are ignored
+    if (index < boundaryRootIndex) {
+      continue;
+    }
+
+    const ownsNotFound = index !== fromIndex || includeOwnNotFound;
+    // The root layout segment always gets a not-found boundary, falling back to the default UI
+    if (ownsNotFound && (segment.notFound || index === boundaryRootIndex)) {
       element = React.createElement(NotFoundBoundary, {
         children: element,
         notFound: React.createElement(segment.notFound?.default ?? DefaultNotFoundElement),
@@ -86,113 +165,13 @@ export function createRouteElement(
     if (segment.layout) {
       element = React.createElement(segment.layout.default, {
         children: element,
-        params: Promise.resolve(params),
-        searchParams: trackedSearchParams,
-      });
-    }
-  }
-
-  return React.createElement(ErrorBoundary, {
-    children: React.createElement(RedirectBoundary, { children: element }),
-    FallbackComponent: GlobalErrorElement,
-  });
-}
-
-export function createRouteNotFoundElement(
-  route: NliteRouteRecord,
-  params: RouteParams,
-  searchParams: URLSearchParams = new URLSearchParams(),
-): React.ReactElement {
-  const trackedSearchParams = trackSearchParams(searchParams);
-  const resolvedParams = Promise.resolve(params);
-  let notFoundSegmentIndex = -1;
-
-  for (let index = route.tree.length - 1; index >= 0; index -= 1) {
-    if (route.tree[index]?.notFound) {
-      notFoundSegmentIndex = index;
-      break;
-    }
-  }
-
-  if (notFoundSegmentIndex === -1) {
-    return createGlobalNotFoundElement([route], searchParams);
-  }
-
-  const notFoundModule = route.tree[notFoundSegmentIndex]?.notFound;
-  let element: React.ReactElement = React.createElement(notFoundModule!.default);
-
-  for (let index = notFoundSegmentIndex; index >= 0; index -= 1) {
-    const segment = route.tree[index];
-
-    if (segment.notFound && index !== notFoundSegmentIndex) {
-      element = React.createElement(NotFoundBoundary, {
-        children: element,
-        notFound: React.createElement(segment.notFound.default),
-      });
-    }
-    if (segment.loading) {
-      element = React.createElement(Suspense, {
-        children: element,
-        fallback: React.createElement(segment.loading.default),
-      });
-    }
-    if (segment.error) {
-      element = React.createElement(ErrorBoundary, {
-        children: element,
-        FallbackComponent: segment.error.default,
-      });
-    }
-
-    if (segment?.layout) {
-      element = React.createElement(segment.layout.default, {
-        children: element,
         params: resolvedParams,
-        searchParams: trackedSearchParams,
       });
     }
   }
 
-  return React.createElement(ErrorBoundary, {
-    children: React.createElement(RedirectBoundary, { children: element }),
-    FallbackComponent: GlobalErrorElement,
-  });
-}
-
-export function createGlobalNotFoundElement(
-  routes: NliteRouteRecord[],
-  searchParams: URLSearchParams = new URLSearchParams(),
-): React.ReactElement {
-  const rootRoute = routes.find((route) => route.routePath === "/");
-
-  const trackedSearchParams = trackSearchParams(searchParams);
-  const params = Promise.resolve({});
-  const rootSegment = rootRoute?.tree?.[0];
-  const notFoundModule = rootSegment?.notFound;
-
-  let element: React.ReactElement = notFoundModule
-    ? React.createElement(notFoundModule.default)
-    : React.createElement(DefaultNotFoundElement);
-
-  if (rootSegment?.loading) {
-    element = React.createElement(Suspense, {
-      children: element,
-      fallback: React.createElement(rootSegment.loading.default),
-    });
-  }
-
-  if (rootSegment?.error) {
-    element = React.createElement(ErrorBoundary, {
-      children: element,
-      FallbackComponent: rootSegment.error.default,
-    });
-  }
-
-  if (rootSegment?.layout) {
-    element = React.createElement(rootSegment.layout.default, {
-      children: element,
-      params,
-      searchParams: trackedSearchParams,
-    });
+  if (rootIndex === -1) {
+    element = React.createElement(DefaultRootLayout, { children: element });
   }
 
   return React.createElement(ErrorBoundary, {

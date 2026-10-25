@@ -75,7 +75,10 @@ export async function handler(request: Request, env?: NliteHandlerEnv) {
     async () => {
       const metadata = await resolveRouteMetadata(match.route, match.params, url.searchParams);
       const app = createRouteElement(match.route, match.params, url.searchParams);
-      return renderToReadableStream<RscPayload>({ root: app, metadata }, { onError: onRscError });
+      return renderToReadableStream<RscPayload>(
+        { root: app, metadata, rootLayout: match.route.rootLayout },
+        { onError: onRscError },
+      );
     },
     { searchParams: url.searchParams },
   );
@@ -121,7 +124,7 @@ async function notFoundHandler(request: Request, env?: NliteHandlerEnv) {
       const metadata = await resolveGlobalNotFoundMetadata(routes, renderRequest.url.searchParams);
       const app = createGlobalNotFoundElement(routes, renderRequest.url.searchParams);
       return renderToReadableStream<RscPayload>(
-        { root: app, metadata },
+        { root: app, metadata, rootLayout: getGlobalRootLayout(routes) },
         {
           onError: (error: unknown) => {
             throw error;
@@ -151,7 +154,7 @@ async function resumeRenderResponse(
       const metadata = await resolveRouteMetadata(match.route, match.params, url.searchParams);
       const app = createRouteElement(match.route, match.params, renderRequest.url.searchParams);
       const rscStream = renderToReadableStream<RscPayload>(
-        { root: app, metadata },
+        { root: app, metadata, rootLayout: match.route.rootLayout },
         { onError: onRscError },
       );
 
@@ -313,10 +316,14 @@ async function prerenderRoute(
       async () => {
         const metadata = await resolveRouteMetadata(route, params, renderRequest.url.searchParams);
         const app = createRouteElement(route, params, renderRequest.url.searchParams);
-        return prerender<RscPayload>({ root: app, metadata }, createClientManifest(), {
-          signal: prospectiveController.signal,
-          onError: onRscError,
-        });
+        return prerender<RscPayload>(
+          { root: app, metadata, rootLayout: route.rootLayout },
+          createClientManifest(),
+          {
+            signal: prospectiveController.signal,
+            onError: onRscError,
+          },
+        );
       },
       {
         cache,
@@ -345,10 +352,14 @@ async function prerenderRoute(
       const metadata = await resolveRouteMetadata(route, params, renderRequest.url.searchParams);
       const app = createRouteElement(route, params, renderRequest.url.searchParams);
       const renderFlight = () =>
-        prerender<RscPayload>({ root: app, metadata }, createClientManifest(), {
-          signal: controller.signal,
-          onError: onRscError,
-        });
+        prerender<RscPayload>(
+          { root: app, metadata, rootLayout: route.rootLayout },
+          createClientManifest(),
+          {
+            signal: controller.signal,
+            onError: onRscError,
+          },
+        );
 
       if (!allowPartialShell) return renderFlight();
 
@@ -441,16 +452,20 @@ export async function handleGlobalNotFoundPrerender(
       const metadata = await resolveGlobalNotFoundMetadata(routes, renderRequest.url.searchParams);
       const app = createGlobalNotFoundElement(routes, renderRequest.url.searchParams);
 
-      return prerender<RscPayload>({ root: app, metadata }, createClientManifest(), {
-        signal: controller.signal,
-        onError: (error: unknown) => {
-          if (error instanceof DynamicPrerenderUsageError) {
-            return;
-          }
+      return prerender<RscPayload>(
+        { root: app, metadata, rootLayout: getGlobalRootLayout(routes) },
+        createClientManifest(),
+        {
+          signal: controller.signal,
+          onError: (error: unknown) => {
+            if (error instanceof DynamicPrerenderUsageError) {
+              return;
+            }
 
-          throw error;
+            throw error;
+          },
         },
-      });
+      );
     },
     {
       searchParams: renderRequest.url.searchParams,
@@ -528,4 +543,8 @@ async function loadPrerenderMeta(request: Request) {
   } catch {
     return;
   }
+}
+
+function getGlobalRootLayout(routeRecords: typeof routes) {
+  return (routeRecords.find((route) => route.routePath === "/") ?? routeRecords[0])?.rootLayout;
 }

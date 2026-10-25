@@ -1,25 +1,45 @@
 import React, { type PropsWithChildren, type ReactNode } from "react";
 
-import { styles, scripts } from "virtual:nlite/assets";
+import { styles } from "virtual:nlite/assets";
 
 import type { RouteMetadata } from "../../types.js";
 import { createHeadNodes } from "../metadata/head.js";
 
-export function Document({
-  children,
-  metadata,
-  headExtras,
-}: PropsWithChildren<{ metadata: RouteMetadata; headExtras?: ReactNode }>) {
-  const headNodes = [
-    scripts ? React.createElement("script", { key: "bootstrap", src: scripts }) : null,
-    styles ? React.createElement("link", { key: "styles", rel: "stylesheet", href: styles }) : null,
-    ...createHeadNodes(metadata, headExtras),
-  ];
+/**
+ * Rendered by SSR and the browser (never by the RSC environment) as a sibling before the user's
+ * root layout. Everything here is hoistable (`<title>`, `<meta>`, `<link>`), so React moves it
+ * into the `<head>` owned by the root layout and updates it on navigation.
+ */
+export function AppHead({ metadata }: { metadata: RouteMetadata }) {
+  return React.createElement(
+    React.Fragment,
+    null,
+    styles
+      ? React.createElement("link", { rel: "stylesheet", href: styles, precedence: "nlite" })
+      : null,
+    ...createHeadNodes(metadata),
+  );
+}
 
+/**
+ * Minimal document used where the user's root layout cannot render: the shells sent when a
+ * redirect or not-found is thrown before any bytes were flushed.
+ */
+export function ShellDocument({ headExtras }: { headExtras?: ReactNode }) {
   return React.createElement(
     "html",
-    { lang: "en" },
-    React.createElement("head", null, ...headNodes),
-    React.createElement("body", null, children),
+    null,
+    React.createElement(
+      "head",
+      null,
+      styles ? React.createElement("link", { rel: "stylesheet", href: styles }) : null,
+      ...createHeadNodes({}, headExtras),
+    ),
+    React.createElement("body"),
   );
+}
+
+/** Fallback used only when a route has no root layout at all */
+export function DefaultRootLayout({ children }: PropsWithChildren) {
+  return React.createElement("html", { lang: "en" }, React.createElement("body", null, children));
 }

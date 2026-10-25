@@ -9,10 +9,11 @@ import {
 } from "../lib/navigation/client.js";
 import { fetchRouteTree, invalidateRouteCache, prefetchRoute } from "../lib/route-cache.js";
 import type { RouterNavigateOptions, RscPayload } from "../types.js";
-import { Document } from "../utils/elements/document.js";
+import { AppHead } from "../utils/elements/document.js";
 
 let navigationRoot: Root | null = null;
 let navigationVersion = 0;
+let currentRootLayout: string | undefined;
 
 async function bootNavigation() {
   const inlineStream = window.__NLITE_READ_RSC__?.();
@@ -21,6 +22,7 @@ async function bootNavigation() {
     : await fetchRouteTree(new URL(window.location.href), createRscHref);
 
   setNavigationSnapshot(new URL(window.location.href));
+  currentRootLayout = (payload as RscPayload).rootLayout;
   navigationRoot = hydrateRoot(document, renderDocument(payload as RscPayload));
   setNavigationRuntime(createNavigationRuntime());
 
@@ -121,6 +123,19 @@ async function renderUrl(
     return;
   }
 
+  const nextPayload = nextRoot as RscPayload;
+  // Different root layouts own different <html> documents, so they cannot be reconciled
+  if (nextPayload.rootLayout !== currentRootLayout) {
+    if (options.updateHistory === "replace") {
+      window.location.replace(url.href);
+    } else if (options.updateHistory === "push") {
+      window.location.assign(url.href);
+    } else {
+      window.location.reload();
+    }
+    return;
+  }
+
   if (options.updateHistory) {
     updateBrowserHistory(url, options.updateHistory === "replace");
   }
@@ -165,7 +180,13 @@ function scrollToTarget(hash: string) {
 }
 
 function renderDocument(payload: RscPayload) {
-  return React.createElement(Document, { metadata: payload.metadata }, payload.root);
+  // The user's root layout renders <html>/<body>; head nodes are hoisted into its <head>
+  return React.createElement(
+    React.Fragment,
+    null,
+    React.createElement(AppHead, { metadata: payload.metadata }),
+    payload.root,
+  );
 }
 
 bootNavigation();

@@ -95,7 +95,21 @@ function hasArrayChanged(prev: unknown[] = [], next: unknown[] = []) {
   return prev.length !== next.length || prev.some((item, index) => !Object.is(item, next[index]));
 }
 
-export function GlobalErrorElement({ reset }: ErrorBoundaryFallbackProps): React.ReactElement {
+// Replaces the root layout when it throws, so it renders its own <html> and <body>
+export function GlobalErrorElement(props: ErrorBoundaryFallbackProps): React.ReactElement {
+  return React.createElement(
+    "html",
+    { lang: "en" },
+    React.createElement(
+      "body",
+      null,
+      React.createElement("title", null, "Something went wrong"),
+      React.createElement(GlobalErrorContent, props),
+    ),
+  );
+}
+
+function GlobalErrorContent({ reset }: ErrorBoundaryFallbackProps): React.ReactElement {
   return React.createElement(
     "div",
     { className: STYLE_CLASS },
