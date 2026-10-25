@@ -6,6 +6,7 @@ import {
   collectStaticPaths,
   createGlobalNotFoundElement,
   createRouteElement,
+  createRouteShellElement,
   matchRoute,
   resolveGlobalNotFoundMetadata,
 } from "../runtime.js";
@@ -26,6 +27,7 @@ import {
   STALE_TIME_HEADER,
 } from "../utils/constants.js";
 import { tryCatch } from "../utils/index.js";
+import { fromPrefetchPathname } from "../utils/path.js";
 import { teeRscStream } from "../utils/stream.js";
 import { runInSequentialTasks } from "../utils/scheduler.js";
 import { resolveRouteMetadata } from "../utils/metadata/index.js";
@@ -62,7 +64,14 @@ export async function handler(request: Request, env?: NliteHandlerEnv) {
 
   const match = matchRoute(routes, renderRequest.pathname);
 
-  if (!match) return notFoundHandler(request, env);
+  if (!match) {
+    if (renderRequest.isPrefetch) return new Response(null, { status: 204 });
+    return notFoundHandler(request, env);
+  }
+
+  if (renderRequest.isPrefetch) {
+    return prefetchShellResponse(request, match, renderRequest);
+  }
 
   if (isResumeRequest(request)) {
     const meta = await loadPrerenderMeta(request);
@@ -317,7 +326,7 @@ async function prerenderRoute(
         const metadata = await resolveRouteMetadata(route, params, renderRequest.url.searchParams);
         const app = createRouteElement(route, params, renderRequest.url.searchParams);
         return prerender<RscPayload>(
-          { root: app, metadata, rootLayout: route.rootLayout },
+          { root: app, metadata, rootLayout: route.rootLayout, partial: allowPartialShell },
           createClientManifest(),
           {
             signal: prospectiveController.signal,
@@ -353,7 +362,7 @@ async function prerenderRoute(
       const app = createRouteElement(route, params, renderRequest.url.searchParams);
       const renderFlight = () =>
         prerender<RscPayload>(
-          { root: app, metadata, rootLayout: route.rootLayout },
+          { root: app, metadata, rootLayout: route.rootLayout, partial: allowPartialShell },
           createClientManifest(),
           {
             signal: controller.signal,
@@ -509,13 +518,56 @@ function isDocumentRenderRequest(request: Request, pathname: string) {
 
 function parseRenderRequest(request: Request, pathname = new URL(request.url).pathname) {
   const url = new URL(request.url);
+  const prefetchPathname = fromPrefetchPathname(pathname);
+  if (prefetchPathname) {
+    return { isRsc: true, isPrefetch: true, pathname: prefetchPathname, url };
+  }
+
   const pagePathname = pathname.endsWith(".rsc") ? pathname.slice(0, -4) || "/" : pathname;
 
   return {
     isRsc: pathname.endsWith(".rsc"),
+    isPrefetch: false,
     pathname: pagePathname,
     url,
   };
+}
+
+/**
+ * Prefetch for a route that is rendered on demand. Prerendered routes are served as static files
+ * (the full payload, or the PPR static shell) and never reach this. Renders the tree down to the
+ * deepest loading boundary; routes without one get nothing to prefetch.
+ */
+async function prefetchShellResponse(
+  request: Request,
+  match: NonNullable<ReturnType<typeof matchRoute>>,
+  renderRequest: ReturnType<typeof parseRenderRequest>,
+) {
+  const shell = createRouteShellElement(match.route, match.params);
+  if (!shell) {
+    return new Response(null, {
+      status: 204,
+      headers: { [STALE_TIME_HEADER]: String(__NLITE_STALE_TIMES__.static) },
+    });
+  }
+
+  const stream = await runWithRequestContext(
+    request,
+    async () =>
+      renderToReadableStream<RscPayload>(
+        { root: shell, rootLayout: match.route.rootLayout, partial: true },
+        { onError: onRscError },
+      ),
+    { searchParams: renderRequest.url.searchParams },
+  );
+
+  return new Response(stream, {
+    status: 200,
+    headers: {
+      "content-type": "text/x-component;charset=utf-8",
+      [STALE_TIME_HEADER]: String(__NLITE_STALE_TIMES__.static),
+    },
+  });
 }
 
 function isResumeRequest(request: Request) {

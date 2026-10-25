@@ -8,6 +8,7 @@ import { tryCatch } from "./index.js";
 export interface RouteModuleFiles {
   page: string;
   tree: {
+    segment: string;
     layout?: string;
     loading?: string;
     error?: string;
@@ -139,6 +140,7 @@ async function collectTree(appRoot: string, pageDir: string) {
     const notFound = await findConventionFile(currentDir, "not-found");
 
     const currentSegment = {
+      segment: currentDir === appRoot ? "" : path.basename(currentDir),
       layout,
       loading,
       error,

@@ -315,7 +315,7 @@ function buildTreeSegmentModule({
   segmentIndex: number;
   segment: Awaited<ReturnType<typeof discoverRoutes>>[number]["tree"][number];
 }) {
-  const entries: string[] = [];
+  const entries: string[] = [`segment: ${JSON.stringify(segment.segment)}`];
 
   addTreeConventionImport({
     entries,

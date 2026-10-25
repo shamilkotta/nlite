@@ -1,8 +1,9 @@
-import React, { Suspense } from "react";
+import React, { Fragment, Suspense } from "react";
 
 import { ErrorBoundary, GlobalErrorElement } from "./lib/error-boundary.js";
 import { NotFoundBoundary } from "./lib/not-found-boundary.js";
 import { RedirectBoundary } from "./lib/redirect-boundary.js";
+import { PrefetchHole } from "./lib/prefetch-hole.js";
 import { trackSearchParams } from "./internal/request-context.js";
 import { compileRoutePath, matchCompiledPath } from "./utils/path.js";
 import type {
@@ -115,6 +116,33 @@ export function createGlobalNotFoundElement(
 }
 
 /**
+ * Prefetch shell for routes that cannot be prerendered: layouts down to the deepest loading
+ * boundary, with the loading UI in place of everything below it. Matches the full tree's
+ * structure and keys, so the full payload reconciles into it without remounting the layouts.
+ * Returns undefined when the route has no loading boundary below its root layout.
+ */
+export function createRouteShellElement(
+  route: NliteRouteRecord,
+  params: RouteParams,
+): React.ReactElement | undefined {
+  const rootIndex = Math.max(getRootLayoutIndex(route.tree), 0);
+  let loadingIndex = -1;
+
+  for (let index = route.tree.length - 1; index >= rootIndex; index -= 1) {
+    if (route.tree[index]?.loading) {
+      loadingIndex = index;
+      break;
+    }
+  }
+
+  if (loadingIndex === -1) {
+    return;
+  }
+
+  return wrapSegments(route.tree, loadingIndex, React.createElement(PrefetchHole), params, false);
+}
+
+/**
  * Index of the segment whose layout is the root layout (the one rendering `<html>` and `<body>`).
  * With route groups an app can have several root layouts, so this is the first segment that has
  * a layout rather than always `tree[0]`.
@@ -162,6 +190,13 @@ function wrapSegments(
         FallbackComponent: segment.error.default,
       });
     }
+    // Keyed by the child segment's resolved value, so moving to another child (e.g. /blog/a ->
+    // /blog/b) remounts the boundaries below this layout: error state resets and loading UI shows
+    element = React.createElement(
+      Fragment,
+      { key: getChildSegmentKey(tree, index, params) },
+      element,
+    );
     if (segment.layout) {
       element = React.createElement(segment.layout.default, {
         children: element,
@@ -178,6 +213,27 @@ function wrapSegments(
     children: React.createElement(RedirectBoundary, { children: element }),
     FallbackComponent: GlobalErrorElement,
   });
+}
+
+const PAGE_SEGMENT_KEY = "__PAGE__";
+
+function getChildSegmentKey(tree: NliteRouteSegmentModule[], index: number, params: RouteParams) {
+  const child = tree[index + 1];
+  if (!child) {
+    return PAGE_SEGMENT_KEY;
+  }
+
+  const segment = child.segment ?? "";
+  if (segment.startsWith("[...") && segment.endsWith("]")) {
+    const value = params[segment.slice(4, -1)];
+    return `${segment}=${Array.isArray(value) ? value.join("/") : (value ?? "")}`;
+  }
+
+  if (segment.startsWith("[") && segment.endsWith("]")) {
+    return `${segment}=${String(params[segment.slice(1, -1)] ?? "")}`;
+  }
+
+  return segment;
 }
 
 export async function resolveGlobalNotFoundMetadata(

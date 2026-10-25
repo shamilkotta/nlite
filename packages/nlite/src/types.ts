@@ -115,9 +115,15 @@ export interface RouteMetadata {
 
 export interface RscPayload {
   root: React.ReactNode;
-  metadata: RouteMetadata;
+  /** Omitted by prefetch shells that skip metadata; the current head is kept until the full payload */
+  metadata?: RouteMetadata;
   /** Identifies the root layout; navigating to a different one triggers a full page load */
   rootLayout?: string;
+  /**
+   * Set on prefetch shells that hold only part of the route (the PPR static shell or the tree
+   * cut at the deepest loading boundary). The full payload is still fetched on navigation.
+   */
+  partial?: boolean;
 }
 
 export interface NlitePageModule extends MetadataModule {
@@ -137,6 +143,8 @@ interface NliteModuleComponent extends MetadataModule {
 }
 
 export interface NliteRouteSegmentModule {
+  /** Directory name of the segment, "" for the app root */
+  segment?: string;
   layout?: NliteModuleComponent;
   loading?: {
     default: ComponentType;

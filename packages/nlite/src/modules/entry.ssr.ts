@@ -182,7 +182,12 @@ function createSsrRoot(rscStream: ReadableStream) {
   function SsrRoot() {
     const { root, metadata } = React.use(payload);
     // Head nodes are hoisted by React into the <head> rendered by the user's root layout
-    return createElement(React.Fragment, null, createElement(AppHead, { metadata }), root);
+    return createElement(
+      React.Fragment,
+      null,
+      createElement(AppHead, { metadata: metadata ?? {} }),
+      root,
+    );
   }
 
   return createElement(SsrRoot);

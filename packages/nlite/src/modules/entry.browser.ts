@@ -7,13 +7,22 @@ import {
   setNavigationSnapshot,
   type NavigationRuntime,
 } from "../lib/navigation/client.js";
-import { fetchRouteTree, invalidateRouteCache, prefetchRoute } from "../lib/route-cache.js";
-import type { RouterNavigateOptions, RscPayload } from "../types.js";
+import {
+  fetchRouteTree,
+  getPrefetchShell,
+  hasFreshRoute,
+  invalidateRouteCache,
+  prefetchRoute,
+} from "../lib/route-cache.js";
+import type { RouteMetadata, RouterNavigateOptions, RscPayload } from "../types.js";
+import { toPrefetchPathname } from "../utils/path.js";
 import { AppHead } from "../utils/elements/document.js";
 
 let navigationRoot: Root | null = null;
 let navigationVersion = 0;
 let currentRootLayout: string | undefined;
+// Shells may omit metadata; the head keeps the last known metadata until the full payload lands
+let currentMetadata: RouteMetadata = {};
 
 async function bootNavigation() {
   const inlineStream = window.__NLITE_READ_RSC__?.();
@@ -66,7 +75,7 @@ function createNavigationRuntime(): NavigationRuntime {
         return;
       }
 
-      await prefetchRoute(url, createRscHref);
+      await prefetchRoute(url, createPrefetchHref);
     },
   };
 }
@@ -115,25 +124,47 @@ async function renderUrl(
   },
 ) {
   const version = ++navigationVersion;
-  const nextRoot = await fetchRouteTree(url, createRscHref, {
+  const shell = !options.bypassCache && !hasFreshRoute(url) ? getPrefetchShell(url) : null;
+  const pendingRoot = fetchRouteTree(url, createRscHref, {
     bypassCache: options.bypassCache,
   });
+
+  // Commit the prefetched shell right away, then patch in the full payload once it arrives.
+  // Keys match between the two, so layouts stay mounted and only the holes are filled.
+  if (shell) {
+    if (!commitNavigation(url, shell, options)) {
+      return;
+    }
+  }
+
+  const nextRoot = (await pendingRoot) as RscPayload;
 
   if (version !== navigationVersion) {
     return;
   }
 
-  const nextPayload = nextRoot as RscPayload;
-  // Different root layouts own different <html> documents, so they cannot be reconciled
-  if (nextPayload.rootLayout !== currentRootLayout) {
-    if (options.updateHistory === "replace") {
-      window.location.replace(url.href);
-    } else if (options.updateHistory === "push") {
-      window.location.assign(url.href);
-    } else {
-      window.location.reload();
+  if (shell) {
+    if (nextPayloadChangesRootLayout(nextRoot)) {
+      return hardNavigate(url, false);
     }
+    startTransition(() => {
+      navigationRoot?.render(renderDocument(nextRoot));
+    });
     return;
+  }
+
+  commitNavigation(url, nextRoot, options);
+}
+
+function commitNavigation(
+  url: URL,
+  payload: RscPayload,
+  options: { updateHistory: false | "push" | "replace"; scroll: boolean },
+) {
+  // Different root layouts own different <html> documents, so they cannot be reconciled
+  if (nextPayloadChangesRootLayout(payload)) {
+    hardNavigate(url, options.updateHistory);
+    return false;
   }
 
   if (options.updateHistory) {
@@ -143,11 +174,27 @@ async function renderUrl(
   setNavigationSnapshot(url);
 
   startTransition(() => {
-    navigationRoot?.render(renderDocument(nextRoot as RscPayload));
+    navigationRoot?.render(renderDocument(payload));
   });
 
   if (options.scroll) {
     scrollToTarget(url.hash);
+  }
+
+  return true;
+}
+
+function nextPayloadChangesRootLayout(payload: RscPayload) {
+  return payload.rootLayout !== currentRootLayout;
+}
+
+function hardNavigate(url: URL, updateHistory: false | "push" | "replace") {
+  if (updateHistory === "replace") {
+    window.location.replace(url.href);
+  } else if (updateHistory === "push") {
+    window.location.assign(url.href);
+  } else {
+    window.location.reload();
   }
 }
 
@@ -162,6 +209,10 @@ function isSameOrigin(url: URL) {
 function updateBrowserHistory(url: URL, replace = false) {
   const method = replace ? "replaceState" : "pushState";
   window.history[method](null, "", url);
+}
+
+function createPrefetchHref(url: URL) {
+  return `${toPrefetchPathname(url.pathname)}${url.search}`;
 }
 
 function createRscHref(url: URL) {
@@ -180,11 +231,15 @@ function scrollToTarget(hash: string) {
 }
 
 function renderDocument(payload: RscPayload) {
+  if (payload.metadata) {
+    currentMetadata = payload.metadata;
+  }
+
   // The user's root layout renders <html>/<body>; head nodes are hoisted into its <head>
   return React.createElement(
     React.Fragment,
     null,
-    React.createElement(AppHead, { metadata: payload.metadata }),
+    React.createElement(AppHead, { metadata: currentMetadata }),
     payload.root,
   );
 }
