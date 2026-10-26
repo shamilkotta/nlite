@@ -79,6 +79,17 @@ describe("nlite dev (ppr: true)", () => {
       expect(textById(await response.text(), "root-not-found")).toBe("Root not found");
     });
 
+    it("renders client navigation hooks with the request URL", async () => {
+      const body = await (await app.fetch("/hooks?q=ada")).text();
+      expect(textById(body, "pathname")).toBe("/hooks");
+      expect(textById(body, "search-q")).toBe("ada");
+    });
+
+    it("rejects client navigation hooks in Server Components", async () => {
+      expect((await app.fetch("/server-hook")).status).toBe(500);
+      expect(app.logs()).toContain("usePathname() is only available in Client Components");
+    });
+
     it("serves route handlers", async () => {
       expect(await (await app.fetch("/api/ping")).json()).toEqual({ pong: true });
     });
@@ -103,6 +114,12 @@ describe("nlite dev (ppr: true)", () => {
       const { page } = await browser.open(app.url("/"));
       await page.locator("#to-redirect").click();
       await page.waitForURL(app.url("/target"));
+    });
+
+    it("hydrates client navigation hooks without errors", async () => {
+      const { page, errors } = await browser.open(app.url("/hooks?q=ada"));
+      await page.locator("#search-q", { hasText: "ada" }).waitFor();
+      expect(errors).toEqual([]);
     });
 
     it("shows the error UI when a page throws", async () => {

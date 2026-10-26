@@ -53,6 +53,18 @@ export function nlite(options: NliteOptions = {}): PluginOption[] {
         define: {
           __NLITE_STALE_TIMES__: JSON.stringify(resolveStaleTimes(options.staleTimes)),
         },
+        environments: {
+          client: {
+            optimizeDeps: {
+              // The browser entry is loaded from nlite's dist, so app imports of `nlite/*` must
+              // resolve to those same files. Pre-bundling them would create a second copy of
+              // nlite's modules (and its React context) in `.vite/deps`.
+              exclude: ["nlite"],
+              // nlite's CommonJS dependencies still need pre-bundling once nlite is excluded
+              include: ["react", "react/jsx-runtime", "react/jsx-dev-runtime", "react-dom/client"],
+            },
+          },
+        },
       };
     },
     configResolved(config) {

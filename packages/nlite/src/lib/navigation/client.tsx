@@ -1,37 +1,14 @@
-"use client";
-
-import { createContext, useContext, useMemo, type Context, type ReactNode } from "react";
+// Client hooks. Not a client boundary: Server Components resolve `nlite/navigation` to
+// index.react-server.ts, so this module only runs in the ssr and browser environments.
+import { createContext, useContext, useMemo, type ReactNode } from "react";
 
 import type { NliteRouter, RouterNavigateOptions } from "../../types.js";
 
 interface NavigationSnapshot {
-  href: string;
   pathname: string;
   search: string;
   searchParams: URLSearchParams;
   hash: string;
-}
-
-interface NavigationStore {
-  snapshot: NavigationSnapshot;
-}
-
-const NAVIGATION_RUNTIME_KEY = "__NLITE_NAVIGATION_RUNTIME__";
-const NAVIGATION_STORE_KEY = "__NLITE_NAVIGATION_STORE__";
-const NAVIGATION_CONTEXT_KEY = "__NLITE_NAVIGATION_CONTEXT__";
-const SERVER_NAVIGATION_URL_KEY = "__NLITE_SERVER_NAVIGATION_URL__";
-let navigationRuntime: NavigationRuntime | undefined;
-let navigationStore: NavigationStore | undefined;
-const NavigationContext = getNavigationContext();
-
-function getNavigationRuntime() {
-  if (navigationRuntime) {
-    return navigationRuntime;
-  }
-
-  return (globalThis as unknown as Record<string, NavigationRuntime | undefined>)[
-    NAVIGATION_RUNTIME_KEY
-  ];
 }
 
 export interface NavigationRuntime {
@@ -43,42 +20,38 @@ export interface NavigationRuntime {
   prefetch: (href: string) => Promise<void>;
 }
 
+let navigationRuntime: NavigationRuntime | undefined;
+
+// The URL is provided together with the rendered tree (by entry.ssr and entry.browser),
+// so the hooks and the content always come from the same render.
+const NavigationContext = createContext<NavigationSnapshot | null>(null);
+
 const router: NliteRouter = {
   push(href, options) {
-    getNavigationRuntime()?.push(href, options);
+    navigationRuntime?.push(href, options);
   },
   replace(href, options) {
-    getNavigationRuntime()?.replace(href, options);
+    navigationRuntime?.replace(href, options);
   },
   back() {
-    getNavigationRuntime()?.back();
+    navigationRuntime?.back();
   },
   forward() {
-    getNavigationRuntime()?.forward();
+    navigationRuntime?.forward();
   },
   refresh() {
-    getNavigationRuntime()?.refresh();
+    navigationRuntime?.refresh();
   },
   async prefetch(href) {
-    await getNavigationRuntime()?.prefetch(href);
+    await navigationRuntime?.prefetch(href);
   },
 };
 
 export function setNavigationRuntime(runtime: NavigationRuntime) {
   navigationRuntime = runtime;
-  (globalThis as unknown as Record<string, NavigationRuntime>)[NAVIGATION_RUNTIME_KEY] = runtime;
-}
-
-export function useRouter() {
-  return router;
-}
-
-export function usePathname() {
-  return useNavigationSnapshot().pathname;
-}
-
-export function useSearchParams() {
-  return useNavigationSnapshot().searchParams;
+  // Exposed (like `window.next.router`) so tooling and tests can detect a ready router
+  (globalThis as unknown as Record<string, NavigationRuntime>).__NLITE_NAVIGATION_RUNTIME__ =
+    runtime;
 }
 
 export function NavigationProvider({ url, children }: { url: URL; children?: ReactNode }) {
@@ -88,64 +61,30 @@ export function NavigationProvider({ url, children }: { url: URL; children?: Rea
   return <NavigationContext.Provider value={snapshot}>{children}</NavigationContext.Provider>;
 }
 
-// The browser entry provides the URL together with the rendered tree, so both commit in the
-// same (transition) render. Outside the provider (ssr / ssg) the store snapshot is used.
-function useNavigationSnapshot() {
-  return useContext(NavigationContext) ?? getNavigationStore().snapshot;
+export function useRouter() {
+  return router;
 }
 
-function getNavigationContext() {
-  const globals = globalThis as unknown as Record<string, Context<NavigationSnapshot | null>>;
-  // Shared through globalThis so duplicated module instances still see one context
-  globals[NAVIGATION_CONTEXT_KEY] ??= createContext<NavigationSnapshot | null>(null);
-  return globals[NAVIGATION_CONTEXT_KEY];
+export function usePathname() {
+  return useNavigationSnapshot("usePathname").pathname;
 }
 
-function getNavigationStore() {
-  if (typeof window === "undefined") {
-    // ssr / ssg
-    const url = getServerNavigationUrl();
-    navigationStore = {
-      snapshot: url
-        ? snapshotFromUrl(url)
-        : { href: "", pathname: "/", search: "", searchParams: new URLSearchParams(), hash: "" },
-    };
-
-    return navigationStore;
-  }
-
-  if (navigationStore) {
-    return navigationStore;
-  }
-
-  const globalStore = (globalThis as unknown as Record<string, NavigationStore | undefined>)[
-    NAVIGATION_STORE_KEY
-  ];
-
-  if (globalStore) {
-    navigationStore = globalStore;
-    return globalStore;
-  }
-
-  navigationStore = {
-    snapshot: snapshotFromUrl(new URL(window.location.href)),
-  };
-
-  (globalThis as unknown as Record<string, NavigationStore>)[NAVIGATION_STORE_KEY] =
-    navigationStore;
-
-  return navigationStore;
+export function useSearchParams() {
+  return useNavigationSnapshot("useSearchParams").searchParams;
 }
 
-function getServerNavigationUrl() {
-  return (globalThis as unknown as Record<string, (() => URL | undefined) | undefined>)[
-    SERVER_NAVIGATION_URL_KEY
-  ]?.();
+function useNavigationSnapshot(hook: string) {
+  const snapshot = useContext(NavigationContext);
+
+  if (!snapshot) {
+    throw new Error(`${hook}() must be called from a component rendered by the nlite app.`);
+  }
+
+  return snapshot;
 }
 
 function snapshotFromUrl(url: URL): NavigationSnapshot {
   return {
-    href: url.href,
     pathname: url.pathname,
     search: url.search,
     searchParams: new URLSearchParams(url.search),

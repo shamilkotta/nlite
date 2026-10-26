@@ -6,7 +6,7 @@ import type { RscPayload } from "../types.js";
 import { Document } from "../utils/elements/document.js";
 import { suppressStreamClose, teeRscStream } from "../utils/stream.js";
 import { runInSequentialTasks } from "../utils/scheduler.js";
-import { runWithNavigationUrl } from "../internal/navigation-context.js";
+import { NavigationProvider } from "../lib/navigation/client.js";
 import {
   getRedirectStatusCodeFromError,
   getURLFromRedirectError,
@@ -28,11 +28,9 @@ export async function resumeHtml(
   let htmlStream: ReadableStream<Uint8Array>;
   let status: number | undefined;
 
-  const resumeFn = runWithNavigationUrl(options.url, () =>
-    resume(createSsrRoot(rscForSsr), postponed, {
-      onError: reportRenderError,
-    }),
-  );
+  const resumeFn = resume(createSsrRoot(rscForSsr, options.url), postponed, {
+    onError: reportRenderError,
+  });
 
   const [resp, error] = await tryCatch(resumeFn);
   if (error) {
@@ -54,7 +52,7 @@ export async function renderHtml(
     ? await teeRscStream(rscStream)
     : [rscStream, undefined];
   const held = _options.ssg && _options.abort ? suppressStreamClose(rscForSsr) : undefined;
-  const ssrRoot = createSsrRoot(held?.stream ?? rscForSsr);
+  const ssrRoot = createSsrRoot(held?.stream ?? rscForSsr, _options.url);
   const bootstrapScriptContent = await import.meta.viteRsc.loadBootstrapScriptContent("index");
 
   let htmlStream: ReadableStream<Uint8Array>;
@@ -64,29 +62,25 @@ export async function renderHtml(
   if (_options?.ssg) {
     const controller = new AbortController();
     try {
-      const prerenderResult = await runWithNavigationUrl(_options.url, () => {
-        if (!_options.abort) {
-          return prerender(ssrRoot, {
+      const prerenderResult = await (!_options.abort
+        ? prerender(ssrRoot, {
             bootstrapScriptContent,
             onError: reportRenderError,
             signal: controller.signal,
-          });
-        }
-
-        return runInSequentialTasks(
-          () =>
-            prerender(ssrRoot, {
-              bootstrapScriptContent,
-              onError: reportRenderError,
-              signal: controller.signal,
-            }),
-          () => {
-            if (!controller.signal.aborted) {
-              controller.abort(new DynamicPrerenderUsageError());
-            }
-          },
-        );
-      });
+          })
+        : runInSequentialTasks(
+            () =>
+              prerender(ssrRoot, {
+                bootstrapScriptContent,
+                onError: reportRenderError,
+                signal: controller.signal,
+              }),
+            () => {
+              if (!controller.signal.aborted) {
+                controller.abort(new DynamicPrerenderUsageError());
+              }
+            },
+          ));
       postponed = prerenderResult.postponed;
       htmlStream = prerenderResult.prelude;
     } catch (error) {
@@ -112,12 +106,10 @@ export async function renderHtml(
     }
   } else {
     try {
-      htmlStream = await runWithNavigationUrl(_options.url, () =>
-        renderToReadableStream(ssrRoot, {
-          onError: reportRenderError,
-          bootstrapScriptContent,
-        }),
-      );
+      htmlStream = await renderToReadableStream(ssrRoot, {
+        onError: reportRenderError,
+        bootstrapScriptContent,
+      });
     } catch (error) {
       ({ stream: htmlStream, status, redirect } = await renderError(error, bootstrapScriptContent));
     }
@@ -176,11 +168,16 @@ async function renderError(error: unknown, bootstrapScriptContent: string) {
   return { stream: htmlStream, status, redirect };
 }
 
-function createSsrRoot(rscStream: ReadableStream) {
+function createSsrRoot(rscStream: ReadableStream, url: URL) {
   const payload = createFromReadableStream<RscPayload>(rscStream);
   function SsrRoot() {
     const { root, metadata } = React.use(payload);
-    return createElement(Document, { metadata, children: root });
+    // Mirrors the browser root (NavigationCommitter) so client hooks render the same URL
+    return createElement(
+      NavigationProvider,
+      { url },
+      createElement(Document, { metadata, children: root }),
+    );
   }
 
   return createElement(SsrRoot);

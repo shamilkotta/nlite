@@ -66,6 +66,7 @@
     },
     "./navigation": {
       "types": "./dist/lib/navigation.d.mts",
+      "react-server": "./dist/lib/navigation.react-server.mjs",
       "import": "./dist/lib/navigation.mjs"
     },
     "./headers": {
