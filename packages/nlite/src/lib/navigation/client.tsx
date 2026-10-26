@@ -1,10 +1,11 @@
 "use client";
 
-import { useSyncExternalStore } from "react";
+import { createContext, useContext, useMemo, type Context, type ReactNode } from "react";
 
 import type { NliteRouter, RouterNavigateOptions } from "../../types.js";
 
 interface NavigationSnapshot {
+  href: string;
   pathname: string;
   search: string;
   searchParams: URLSearchParams;
@@ -12,15 +13,16 @@ interface NavigationSnapshot {
 }
 
 interface NavigationStore {
-  listeners: Set<() => void>;
   snapshot: NavigationSnapshot;
 }
 
 const NAVIGATION_RUNTIME_KEY = "__NLITE_NAVIGATION_RUNTIME__";
 const NAVIGATION_STORE_KEY = "__NLITE_NAVIGATION_STORE__";
+const NAVIGATION_CONTEXT_KEY = "__NLITE_NAVIGATION_CONTEXT__";
 const SERVER_NAVIGATION_URL_KEY = "__NLITE_SERVER_NAVIGATION_URL__";
 let navigationRuntime: NavigationRuntime | undefined;
 let navigationStore: NavigationStore | undefined;
+const NavigationContext = getNavigationContext();
 
 function getNavigationRuntime() {
   if (navigationRuntime) {
@@ -79,33 +81,24 @@ export function useSearchParams() {
   return useNavigationSnapshot().searchParams;
 }
 
-export function setNavigationSnapshot(url: URL) {
-  const store = getNavigationStore();
-  store.snapshot = snapshotFromUrl(url);
-  emit(store);
+export function NavigationProvider({ url, children }: { url: URL; children?: ReactNode }) {
+  // One snapshot per URL so consumers get a stable searchParams object across renders
+  const snapshot = useMemo(() => snapshotFromUrl(url), [url.href]);
+
+  return <NavigationContext.Provider value={snapshot}>{children}</NavigationContext.Provider>;
 }
 
+// The browser entry provides the URL together with the rendered tree, so both commit in the
+// same (transition) render. Outside the provider (ssr / ssg) the store snapshot is used.
 function useNavigationSnapshot() {
-  return useSyncExternalStore(
-    subscribe,
-    () => getNavigationStore().snapshot,
-    () => getNavigationStore().snapshot,
-  );
+  return useContext(NavigationContext) ?? getNavigationStore().snapshot;
 }
 
-function subscribe(listener: () => void) {
-  const store = getNavigationStore();
-  store.listeners.add(listener);
-
-  return () => {
-    store.listeners.delete(listener);
-  };
-}
-
-function emit(store: NavigationStore) {
-  for (const listener of store.listeners) {
-    listener();
-  }
+function getNavigationContext() {
+  const globals = globalThis as unknown as Record<string, Context<NavigationSnapshot | null>>;
+  // Shared through globalThis so duplicated module instances still see one context
+  globals[NAVIGATION_CONTEXT_KEY] ??= createContext<NavigationSnapshot | null>(null);
+  return globals[NAVIGATION_CONTEXT_KEY];
 }
 
 function getNavigationStore() {
@@ -113,10 +106,9 @@ function getNavigationStore() {
     // ssr / ssg
     const url = getServerNavigationUrl();
     navigationStore = {
-      listeners: new Set(),
       snapshot: url
         ? snapshotFromUrl(url)
-        : { pathname: "/", search: "", searchParams: new URLSearchParams(), hash: "" },
+        : { href: "", pathname: "/", search: "", searchParams: new URLSearchParams(), hash: "" },
     };
 
     return navigationStore;
@@ -136,7 +128,6 @@ function getNavigationStore() {
   }
 
   navigationStore = {
-    listeners: new Set(),
     snapshot: snapshotFromUrl(new URL(window.location.href)),
   };
 
@@ -154,6 +145,7 @@ function getServerNavigationUrl() {
 
 function snapshotFromUrl(url: URL): NavigationSnapshot {
   return {
+    href: url.href,
     pathname: url.pathname,
     search: url.search,
     searchParams: new URLSearchParams(url.search),
