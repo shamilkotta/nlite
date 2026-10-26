@@ -1,10 +1,10 @@
-import React, { startTransition } from "react";
+import React, { startTransition, useInsertionEffect, useLayoutEffect } from "react";
 import { hydrateRoot, type Root } from "react-dom/client";
 import { createFromReadableStream } from "@vitejs/plugin-rsc/browser";
 
 import {
   setNavigationRuntime,
-  setNavigationSnapshot,
+  NavigationProvider,
   type NavigationRuntime,
 } from "../lib/navigation/client.js";
 import { fetchRouteTree, invalidateRouteCache, prefetchRoute } from "../lib/route-cache.js";
@@ -13,6 +13,14 @@ import { Document } from "../utils/elements/document.js";
 
 let navigationRoot: Root | null = null;
 let navigationVersion = 0;
+let currentPayload: RscPayload | null = null;
+
+interface PendingNavigation {
+  url: URL;
+  updateHistory: false | "push" | "replace";
+  scroll: boolean;
+  onlyHashChange?: boolean;
+}
 
 async function bootNavigation() {
   const inlineStream = window.__NLITE_READ_RSC__?.();
@@ -20,8 +28,14 @@ async function bootNavigation() {
     ? await createFromReadableStream(inlineStream)
     : await fetchRouteTree(new URL(window.location.href), createRscHref);
 
-  setNavigationSnapshot(new URL(window.location.href));
-  navigationRoot = hydrateRoot(document, renderDocument(payload as RscPayload));
+  navigationRoot = hydrateRoot(
+    document,
+    renderDocument(payload as RscPayload, {
+      url: new URL(window.location.href),
+      updateHistory: false,
+      scroll: false,
+    }),
+  );
   setNavigationRuntime(createNavigationRuntime());
 
   window.addEventListener("popstate", () => {
@@ -87,14 +101,21 @@ async function navigate(href: string, options: RouterNavigateOptions) {
 
   const currentUrl = new URL(window.location.href);
 
-  if (nextUrl.pathname === currentUrl.pathname && nextUrl.search === currentUrl.search) {
-    updateBrowserHistory(nextUrl, options.replace);
-    setNavigationSnapshot(nextUrl);
-
-    if (options.scroll !== false) {
-      scrollToTarget(nextUrl.hash);
-    }
-
+  if (
+    currentPayload &&
+    nextUrl.pathname === currentUrl.pathname &&
+    nextUrl.search === currentUrl.search
+  ) {
+    // Hash-only change: same payload, new URL. Supersedes any navigation still in flight.
+    navigationVersion++;
+    navigationRoot?.render(
+      renderDocument(currentPayload, {
+        url: nextUrl,
+        updateHistory: options.replace ? "replace" : "push",
+        scroll: options.scroll ?? true,
+        onlyHashChange: true,
+      }),
+    );
     return;
   }
 
@@ -121,19 +142,17 @@ async function renderUrl(
     return;
   }
 
-  if (options.updateHistory) {
-    updateBrowserHistory(url, options.updateHistory === "replace");
-  }
-
-  setNavigationSnapshot(url);
-
+  // The URL is rendered with the tree, and history and scroll are applied once the
+  // transition commits (see NavigationCommitter), so the old page is never scrolled or relabelled early.
   startTransition(() => {
-    navigationRoot?.render(renderDocument(nextRoot as RscPayload));
+    navigationRoot?.render(
+      renderDocument(nextRoot as RscPayload, {
+        url,
+        updateHistory: options.updateHistory,
+        scroll: options.scroll,
+      }),
+    );
   });
-
-  if (options.scroll) {
-    scrollToTarget(url.hash);
-  }
 }
 
 function resolveUrl(href: string) {
@@ -154,18 +173,73 @@ function createRscHref(url: URL) {
   return `${pathname}${url.search}`;
 }
 
-function scrollToTarget(hash: string) {
-  if (!hash) {
-    window.scrollTo({ top: 0, left: 0 });
+function scrollToTarget(hash: string, onlyHashChange = false) {
+  withoutSmoothScroll(() => {
+    if (!hash) {
+      // scrollIntoView() on <html> scrolls horizontally in some browsers, so only reset vertically.
+      document.documentElement.scrollTop = 0;
+      return;
+    }
+
+    getHashFragmentElement(decodeURIComponent(hash.slice(1)))?.scrollIntoView();
+  }, onlyHashChange);
+}
+
+// Mirrors browser behavior: `#top` scrolls to the top, otherwise match by id, then by name.
+function getHashFragmentElement(fragment: string): HTMLElement | null {
+  if (fragment === "top") {
+    return document.body;
+  }
+
+  return document.getElementById(fragment) ?? document.getElementsByName(fragment)[0] ?? null;
+}
+
+// Route transitions jump instantly even with `<html data-scroll-behavior="smooth">`;
+// hash-only changes keep smooth scrolling.
+function withoutSmoothScroll(fn: () => void, onlyHashChange: boolean) {
+  const html = document.documentElement;
+
+  if (onlyHashChange || html.dataset.scrollBehavior !== "smooth") {
+    fn();
     return;
   }
 
-  const element = document.getElementById(decodeURIComponent(hash.slice(1)));
-  element?.scrollIntoView();
+  const existing = html.style.scrollBehavior;
+  html.style.scrollBehavior = "auto";
+  html.getClientRects(); // force reflow so Chrome picks up the change
+  fn();
+  html.style.scrollBehavior = existing;
 }
 
-function renderDocument(payload: RscPayload) {
-  return React.createElement(Document, { metadata: payload.metadata }, payload.root);
+function NavigationCommitter({
+  navigation,
+  children,
+}: {
+  navigation: PendingNavigation;
+  children?: React.ReactNode;
+}) {
+  useInsertionEffect(() => {
+    if (navigation.updateHistory) {
+      updateBrowserHistory(navigation.url, navigation.updateHistory === "replace");
+    }
+  }, [navigation]);
+
+  useLayoutEffect(() => {
+    if (navigation.scroll) {
+      scrollToTarget(navigation.url.hash, navigation.onlyHashChange);
+    }
+  }, [navigation]);
+
+  return React.createElement(NavigationProvider, { url: navigation.url }, children);
+}
+
+function renderDocument(payload: RscPayload, navigation: PendingNavigation) {
+  currentPayload = payload;
+  return React.createElement(
+    NavigationCommitter,
+    { navigation },
+    React.createElement(Document, { metadata: payload.metadata }, payload.root),
+  );
 }
 
 bootNavigation();
