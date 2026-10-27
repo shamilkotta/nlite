@@ -1,6 +1,9 @@
 import React, { type PropsWithChildren } from "react";
 
-/** Fallback used only when a route has no root layout at all */
 export function DefaultRootLayout({ children }: PropsWithChildren) {
-  return React.createElement("html", { lang: "en" }, React.createElement("body", null, children));
+  return React.createElement(
+    "html",
+    { lang: "en", style: { margin: 0, padding: 0 } },
+    React.createElement("body", null, children),
+  );
 }

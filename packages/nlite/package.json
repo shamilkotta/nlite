@@ -1,6 +1,6 @@
 {
   "name": "nlite",
-  "version": "0.10.0",
+  "version": "0.10.1",
   "description": "Lightweight React 19 framework on Vite with Next.js-style app/ routing: React Server Components, streaming SSR, SSG, Partial Prerendering, route handlers, and adapters for Vercel, Cloudflare, and Netlify",
   "keywords": [
     "app-router",
@@ -66,6 +66,7 @@
     },
     "./navigation": {
       "types": "./dist/lib/navigation.d.mts",
+      "react-server": "./dist/lib/navigation.react-server.mjs",
       "import": "./dist/lib/navigation.mjs"
     },
     "./headers": {

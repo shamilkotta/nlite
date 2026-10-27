@@ -1,6 +1,6 @@
 import React, { Fragment, Suspense } from "react";
 
-import { ErrorBoundary, GlobalErrorElement } from "./lib/error-boundary.js";
+import { ErrorBoundary } from "./lib/error-boundary.js";
 import { NotFoundBoundary } from "./lib/not-found-boundary.js";
 import { RedirectBoundary } from "./lib/redirect-boundary.js";
 import { PrefetchHole } from "./lib/prefetch-hole.js";
@@ -15,6 +15,7 @@ import type {
   RenderingMode,
   RouteParams,
 } from "./types.js";
+import { GlobalErrorElement } from "./utils/elements/global-error.js";
 import { DefaultNotFoundElement } from "./utils/elements/not-found.js";
 import { DefaultRootLayout } from "./utils/elements/root-layout.js";
 import { resolveRouteMetadata } from "./utils/metadata/index.js";
@@ -65,36 +66,6 @@ export function createRouteElement(
   });
 
   return wrapSegments(route.tree, route.tree.length - 1, page, params, true);
-}
-
-export function createRouteNotFoundElement(
-  route: NliteRouteRecord,
-  params: RouteParams,
-  searchParams: URLSearchParams = new URLSearchParams(),
-): React.ReactElement {
-  let notFoundSegmentIndex = -1;
-
-  for (let index = route.tree.length - 1; index >= 0; index -= 1) {
-    if (route.tree[index]?.notFound) {
-      notFoundSegmentIndex = index;
-      break;
-    }
-  }
-
-  if (notFoundSegmentIndex === -1) {
-    return createGlobalNotFoundElement([route], searchParams);
-  }
-
-  const notFoundModule = route.tree[notFoundSegmentIndex]!.notFound!;
-  // The not-found UI replaces its own segment's boundary, so wrapping starts with that segment's
-  // loading/error/layout only
-  return wrapSegments(
-    route.tree,
-    notFoundSegmentIndex,
-    React.createElement(notFoundModule.default),
-    params,
-    false,
-  );
 }
 
 export function createGlobalNotFoundElement(
