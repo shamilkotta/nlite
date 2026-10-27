@@ -7,7 +7,7 @@ import {
   createGlobalNotFoundElement,
   createRouteElement,
   getGlobalNotFoundTree,
-  getRootLayoutKey,
+  getRootPrefix,
   matchRoute,
   resolveGlobalNotFoundMetadata,
 } from "../runtime.js";
@@ -78,7 +78,7 @@ export async function handler(request: Request, env?: NliteHandlerEnv) {
       const metadata = await resolveRouteMetadata(match.route, match.params, url.searchParams);
       const app = createRouteElement(match.route, match.params, url.searchParams);
       return renderToReadableStream<RscPayload>(
-        { root: app, metadata, rootLayoutKey: getRootLayoutKey(match.route.tree) },
+        { root: app, metadata, rootPrefix: getRootPrefix(match.route.tree) },
         { onError: onRscError },
       );
     },
@@ -126,7 +126,7 @@ async function notFoundHandler(request: Request, env?: NliteHandlerEnv) {
       const metadata = await resolveGlobalNotFoundMetadata(routes, renderRequest.url.searchParams);
       const app = createGlobalNotFoundElement(routes, renderRequest.url.searchParams);
       return renderToReadableStream<RscPayload>(
-        { root: app, metadata, rootLayoutKey: getRootLayoutKey(getGlobalNotFoundTree(routes)) },
+        { root: app, metadata, rootPrefix: getRootPrefix(getGlobalNotFoundTree(routes)) },
         {
           onError: (error: unknown) => {
             throw error;
@@ -156,7 +156,7 @@ async function resumeRenderResponse(
       const metadata = await resolveRouteMetadata(match.route, match.params, url.searchParams);
       const app = createRouteElement(match.route, match.params, renderRequest.url.searchParams);
       const rscStream = renderToReadableStream<RscPayload>(
-        { root: app, metadata, rootLayoutKey: getRootLayoutKey(match.route.tree) },
+        { root: app, metadata, rootPrefix: getRootPrefix(match.route.tree) },
         { onError: onRscError },
       );
 
@@ -319,7 +319,7 @@ async function prerenderRoute(
         const metadata = await resolveRouteMetadata(route, params, renderRequest.url.searchParams);
         const app = createRouteElement(route, params, renderRequest.url.searchParams);
         return prerender<RscPayload>(
-          { root: app, metadata, rootLayoutKey: getRootLayoutKey(route.tree) },
+          { root: app, metadata, rootPrefix: getRootPrefix(route.tree) },
           createClientManifest(),
           {
             signal: prospectiveController.signal,
@@ -355,7 +355,7 @@ async function prerenderRoute(
       const app = createRouteElement(route, params, renderRequest.url.searchParams);
       const renderFlight = () =>
         prerender<RscPayload>(
-          { root: app, metadata, rootLayoutKey: getRootLayoutKey(route.tree) },
+          { root: app, metadata, rootPrefix: getRootPrefix(route.tree) },
           createClientManifest(),
           {
             signal: controller.signal,
@@ -455,7 +455,7 @@ export async function handleGlobalNotFoundPrerender(
       const app = createGlobalNotFoundElement(routes, renderRequest.url.searchParams);
 
       return prerender<RscPayload>(
-        { root: app, metadata, rootLayoutKey: getRootLayoutKey(getGlobalNotFoundTree(routes)) },
+        { root: app, metadata, rootPrefix: getRootPrefix(getGlobalNotFoundTree(routes)) },
         createClientManifest(),
         {
           signal: controller.signal,

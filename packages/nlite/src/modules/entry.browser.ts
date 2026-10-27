@@ -144,7 +144,7 @@ async function renderUrl(
 
   const nextPayload = nextRoot as RscPayload;
   // Different root layouts own different <html> documents, so they cannot be reconciled
-  if (currentPayload && nextPayload.rootLayoutKey !== currentPayload.rootLayoutKey) {
+  if (currentPayload && nextPayload.rootPrefix !== currentPayload.rootPrefix) {
     if (options.updateHistory === "replace") {
       window.location.replace(url.href);
     } else if (options.updateHistory === "push") {

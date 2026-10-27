@@ -117,10 +117,11 @@ export interface RscPayload {
   root: React.ReactNode;
   metadata: RouteMetadata;
   /**
-   * Identifies the root layout that rendered this payload. Navigating to a payload with a different
-   * key is a full page load, since each root layout owns its own <html> document.
+   * Segments up to and including the root layout that rendered this payload, e.g. `/(shop)`.
+   * Navigating to a payload with a different prefix is a full page load, since each root layout
+   * owns its own <html> document.
    */
-  rootLayoutKey: string;
+  rootPrefix: string;
 }
 
 export interface NlitePageModule extends MetadataModule {

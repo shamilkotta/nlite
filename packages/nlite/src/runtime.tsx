@@ -102,7 +102,7 @@ export function getRootLayoutIndex(tree: NliteRouteSegmentModule[]) {
  * Two trees share a root layout iff their segments up to and including the root layout match, like
  * Next.js. Dynamic segments keep their directory name (`[lang]`), so param values do not matter.
  */
-export function getRootLayoutKey(tree: NliteRouteSegmentModule[]) {
+export function getRootPrefix(tree: NliteRouteSegmentModule[]) {
   const rootIndex = getRootLayoutIndex(tree);
   if (rootIndex === -1) return "";
 
