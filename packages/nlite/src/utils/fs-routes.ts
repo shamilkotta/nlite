@@ -8,6 +8,8 @@ import { tryCatch } from "./index.js";
 export interface RouteModuleFiles {
   page: string;
   tree: {
+    /** Directory name of the segment (`""` for the app root), e.g. `(marketing)` or `[lang]` */
+    segment: string;
     layout?: string;
     loading?: string;
     error?: string;
@@ -18,8 +20,6 @@ export interface RouteModuleFiles {
 export interface DiscoveredRoute extends RouteModuleFiles {
   id: string;
   routePath: string;
-  /** Project-relative path of the root layout: the first layout, with only route groups above it */
-  rootLayout?: string;
 }
 
 export interface DiscoveredApiRoute {
@@ -42,14 +42,11 @@ export async function discoverRoutes(projectRoot: string, appDir = "app") {
     const pageDir = path.dirname(pageFile);
     const tree = await collectTree(appRoot, pageDir);
 
-    const rootLayoutFile = findRootLayout(tree, path.relative(appRoot, pageDir));
-
     routes.push({
       id: toPosix(path.relative(projectRoot, pageFile)),
       routePath: toRoutePath(appRoot, pageFile),
       page: pageFile,
       tree,
-      rootLayout: rootLayoutFile ? toPosix(path.relative(projectRoot, rootLayoutFile)) : undefined,
     });
   }
 
@@ -97,8 +94,8 @@ export const DEFAULT_ROOT_LAYOUT = `export default function RootLayout({ childre
 `;
 
 /**
- * Every page needs a root layout rendering <html> and <body>. In dev a missing one is generated
- * at `app/layout.tsx` (like Next.js); in a build it is an error.
+ * Every page needs a root layout rendering <html> and <body>: the topmost layout on its path, like
+ * Next.js. In dev a missing one is generated, in a build it is an error.
  */
 export async function ensureRootLayouts(
   routes: DiscoveredRoute[],
@@ -106,7 +103,7 @@ export async function ensureRootLayouts(
   appDir: string,
   mode: "dev" | "build",
 ) {
-  const missing = routes.filter((route) => !route.rootLayout);
+  const missing = routes.filter((route) => !route.tree.some((segment) => segment.layout));
   if (missing.length === 0) {
     return false;
   }
@@ -116,29 +113,52 @@ export async function ensureRootLayouts(
 
   if (mode === "build") {
     throw new Error(
-      `[nlite] Missing root layout for: ${pages.join(", ")}. The root layout must be at the top of app/ or have only route groups above it. Add ${toPosix(path.join(appDir, "layout.tsx"))} rendering <html> and <body>.`,
+      `[nlite] Missing root layout for: ${pages.join(", ")}. Add a layout rendering <html> and <body> at the top of ${appDir}/ or of each route group.`,
     );
   }
 
-  const layoutFile = path.join(appRoot, "layout.tsx");
-  await writeFile(layoutFile, DEFAULT_ROOT_LAYOUT, { flag: "wx" }).catch(() => undefined);
+  const layoutDirs = routes.flatMap((route) =>
+    route.tree.flatMap((segment) => (segment.layout ? [path.dirname(segment.layout)] : [])),
+  );
+  const created: string[] = [];
+
+  for (const route of missing) {
+    const dir = findRootLayoutDir(appRoot, path.dirname(route.page), layoutDirs);
+    if (!dir) {
+      throw new Error(
+        `[nlite] ${toPosix(path.relative(projectRoot, route.page))} does not have a root layout, and one cannot be created without wrapping another root layout. Add a layout rendering <html> and <body> above it.`,
+      );
+    }
+
+    const layoutFile = path.join(dir, "layout.tsx");
+    if (!layoutDirs.includes(dir)) {
+      await writeFile(layoutFile, DEFAULT_ROOT_LAYOUT, { flag: "wx" }).catch(() => undefined);
+      layoutDirs.push(dir);
+      created.push(toPosix(path.relative(projectRoot, layoutFile)));
+    }
+  }
+
   console.warn(
-    `[nlite] ${pages.join(", ")} did not have a root layout, so one was created at ${toPosix(path.relative(projectRoot, layoutFile))}`,
+    `[nlite] ${pages.join(", ")} did not have a root layout, so one was created at ${created.join(", ")}`,
   );
   return true;
 }
 
 /**
- * Like Next.js, only `app/layout` or a layout with nothing but route groups above it can be the root
- * layout. A first layout under a regular segment (e.g. `app/dashboard/layout`) does not count.
+ * The directory closest to app/ where a generated root layout would not wrap an existing layout
+ * (mirrors Next.js). Without any layouts that is `app/` itself.
  */
-function findRootLayout(tree: Awaited<ReturnType<typeof collectTree>>, relativePageDir: string) {
-  const dirs = relativePageDir ? relativePageDir.split(path.sep) : [];
-  const rootIndex = tree.findIndex((segment) => segment.layout);
-  if (rootIndex === -1) return;
+function findRootLayoutDir(appRoot: string, pageDir: string, layoutDirs: string[]) {
+  if (layoutDirs.length === 0) return appRoot;
 
-  const isRouteGroup = (dir: string) => dir.startsWith("(") && dir.endsWith(")");
-  return dirs.slice(0, rootIndex).every(isRouteGroup) ? tree[rootIndex]!.layout : undefined;
+  const dirs = path.relative(appRoot, pageDir).split(path.sep).filter(Boolean);
+  for (let depth = 1; depth <= dirs.length; depth += 1) {
+    const candidate = path.join(appRoot, ...dirs.slice(0, depth));
+    const wrapsLayout = layoutDirs.some(
+      (dir) => dir === candidate || dir.startsWith(candidate + path.sep),
+    );
+    if (!wrapsLayout) return candidate;
+  }
 }
 
 async function collectTree(appRoot: string, pageDir: string) {
@@ -152,6 +172,7 @@ async function collectTree(appRoot: string, pageDir: string) {
     const notFound = await findConventionFile(currentDir, "not-found");
 
     const currentSegment = {
+      segment: currentDir === appRoot ? "" : path.basename(currentDir),
       layout,
       loading,
       error,

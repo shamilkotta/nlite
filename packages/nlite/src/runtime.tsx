@@ -27,7 +27,6 @@ export function createRouteRecord(input: {
   sourceFile: string;
   page: NlitePageModule;
   tree: NliteRouteSegmentModule[];
-  rootLayout?: string;
 }): NliteRouteRecord {
   const rendering = input.page.rendering;
   const { regex, paramNames } = compileRoutePath(input.routePath);
@@ -67,12 +66,17 @@ export function createRouteElement(
   return wrapSegments(route.tree, route.tree.length - 1, page, params, true);
 }
 
+/** The tree the global not-found page renders in: the root layout of `/`, or of the first route */
+export function getGlobalNotFoundTree(routes: NliteRouteRecord[]): NliteRouteSegmentModule[] {
+  const rootRoute = routes.find((route) => route.routePath === "/") ?? routes[0];
+  return rootRoute?.tree ?? [];
+}
+
 export function createGlobalNotFoundElement(
   routes: NliteRouteRecord[],
   _searchParams: URLSearchParams = new URLSearchParams(),
 ): React.ReactElement {
-  const rootRoute = routes.find((route) => route.routePath === "/") ?? routes[0];
-  const tree = rootRoute?.tree ?? [];
+  const tree = getGlobalNotFoundTree(routes);
   const rootIndex = Math.max(getRootLayoutIndex(tree), 0);
   const notFoundModule = tree[rootIndex]?.notFound;
 
@@ -92,6 +96,24 @@ export function createGlobalNotFoundElement(
  */
 export function getRootLayoutIndex(tree: NliteRouteSegmentModule[]) {
   return tree.findIndex((segment) => segment.layout);
+}
+
+/**
+ * Two trees share a root layout iff their segments up to and including the root layout match, like
+ * Next.js. Dynamic segments keep their directory name (`[lang]`), so param values do not matter.
+ */
+export function getRootLayoutKey(tree: NliteRouteSegmentModule[]) {
+  const rootIndex = getRootLayoutIndex(tree);
+  if (rootIndex === -1) return "";
+
+  return (
+    "/" +
+    tree
+      .slice(0, rootIndex + 1)
+      .map((segment) => segment.segment)
+      .filter(Boolean)
+      .join("/")
+  );
 }
 
 function wrapSegments(

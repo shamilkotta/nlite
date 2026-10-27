@@ -116,7 +116,11 @@ export interface RouteMetadata {
 export interface RscPayload {
   root: React.ReactNode;
   metadata: RouteMetadata;
-  rootLayout?: string;
+  /**
+   * Identifies the root layout that rendered this payload. Navigating to a payload with a different
+   * key is a full page load, since each root layout owns its own <html> document.
+   */
+  rootLayoutKey: string;
 }
 
 export interface NlitePageModule extends MetadataModule {
@@ -136,6 +140,8 @@ interface NliteModuleComponent extends MetadataModule {
 }
 
 export interface NliteRouteSegmentModule {
+  /** Directory name of the segment (`""` for the app root), e.g. `(marketing)` or `[lang]` */
+  segment: string;
   layout?: NliteModuleComponent;
   loading?: {
     default: ComponentType;
@@ -154,7 +160,6 @@ export interface NliteRouteRecord {
   sourceFile: string;
   page: NlitePageModule;
   tree: NliteRouteSegmentModule[];
-  rootLayout?: string;
   rendering?: RenderingMode;
   regex: string;
   paramNames: string[];

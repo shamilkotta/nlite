@@ -298,7 +298,6 @@ function buildManifestModule(routes: Awaited<ReturnType<typeof discoverRoutes>>)
   id: ${JSON.stringify(route.id)},
   routePath: ${JSON.stringify(route.routePath)},
   sourceFile: ${JSON.stringify(route.page)},
-  rootLayout: ${JSON.stringify(route.rootLayout)},
   page: ${pageVar},
   tree: [
     ${treeRecord}
@@ -327,7 +326,7 @@ function buildTreeSegmentModule({
   segmentIndex: number;
   segment: Awaited<ReturnType<typeof discoverRoutes>>[number]["tree"][number];
 }) {
-  const entries: string[] = [];
+  const entries: string[] = [`segment: ${JSON.stringify(segment.segment)}`];
 
   addTreeConventionImport({
     entries,

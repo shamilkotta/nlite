@@ -13,7 +13,6 @@ import { AppHead } from "../utils/elements/document.js";
 
 let navigationRoot: Root | null = null;
 let navigationVersion = 0;
-let currentRootLayout: string | undefined;
 let currentPayload: RscPayload | null = null;
 
 interface PendingNavigation {
@@ -29,7 +28,6 @@ async function bootNavigation() {
     ? await createFromReadableStream(inlineStream)
     : await fetchRouteTree(new URL(window.location.href), createRscHref);
 
-  currentRootLayout = (payload as RscPayload).rootLayout;
   navigationRoot = hydrateRoot(
     document,
     renderDocument(payload as RscPayload, {
@@ -146,7 +144,7 @@ async function renderUrl(
 
   const nextPayload = nextRoot as RscPayload;
   // Different root layouts own different <html> documents, so they cannot be reconciled
-  if (nextPayload.rootLayout !== currentRootLayout) {
+  if (currentPayload && nextPayload.rootLayoutKey !== currentPayload.rootLayoutKey) {
     if (options.updateHistory === "replace") {
       window.location.replace(url.href);
     } else if (options.updateHistory === "push") {
@@ -161,7 +159,7 @@ async function renderUrl(
   // transition commits (see NavigationCommitter), so the old page is never scrolled or relabelled early.
   startTransition(() => {
     navigationRoot?.render(
-      renderDocument(nextRoot as RscPayload, {
+      renderDocument(nextPayload, {
         url,
         updateHistory: options.updateHistory,
         scroll: options.scroll,
