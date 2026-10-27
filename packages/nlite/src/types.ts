@@ -116,11 +116,6 @@ export interface RouteMetadata {
 export interface RscPayload {
   root: React.ReactNode;
   metadata: RouteMetadata;
-  /**
-   * Segments up to and including the root layout that rendered this payload, e.g. `/(shop)`.
-   * Navigating to a payload with a different prefix is a full page load, since each root layout
-   * owns its own <html> document.
-   */
   rootPrefix: string;
 }
 
@@ -141,7 +136,6 @@ interface NliteModuleComponent extends MetadataModule {
 }
 
 export interface NliteRouteSegmentModule {
-  /** Directory name of the segment (`""` for the app root), e.g. `(marketing)` or `[lang]` */
   segment: string;
   layout?: NliteModuleComponent;
   loading?: {

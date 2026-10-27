@@ -93,10 +93,6 @@ export const DEFAULT_ROOT_LAYOUT = `export default function RootLayout({ childre
 }
 `;
 
-/**
- * Every page needs a root layout rendering <html> and <body>: the topmost layout on its path, like
- * Next.js. In dev a missing one is generated, in a build it is an error.
- */
 export async function ensureRootLayouts(
   routes: DiscoveredRoute[],
   projectRoot: string,
@@ -144,10 +140,6 @@ export async function ensureRootLayouts(
   return true;
 }
 
-/**
- * The directory closest to app/ where a generated root layout would not wrap an existing layout
- * (mirrors Next.js). Without any layouts that is `app/` itself.
- */
 function findRootLayoutDir(appRoot: string, pageDir: string, layoutDirs: string[]) {
   if (layoutDirs.length === 0) return appRoot;
 

@@ -66,7 +66,6 @@ export function createRouteElement(
   return wrapSegments(route.tree, route.tree.length - 1, page, params, true);
 }
 
-/** The tree the global not-found page renders in: the root layout of `/`, or of the first route */
 export function getGlobalNotFoundTree(routes: NliteRouteRecord[]): NliteRouteSegmentModule[] {
   const rootRoute = routes.find((route) => route.routePath === "/") ?? routes[0];
   return rootRoute?.tree ?? [];
@@ -89,19 +88,10 @@ export function createGlobalNotFoundElement(
   );
 }
 
-/**
- * Index of the segment whose layout is the root layout (the one rendering `<html>` and `<body>`).
- * With route groups an app can have several root layouts, so this is the first segment that has
- * a layout rather than always `tree[0]`.
- */
 export function getRootLayoutIndex(tree: NliteRouteSegmentModule[]) {
   return tree.findIndex((segment) => segment.layout);
 }
 
-/**
- * Two trees share a root layout iff their segments up to and including the root layout match, like
- * Next.js. Dynamic segments keep their directory name (`[lang]`), so param values do not matter.
- */
 export function getRootPrefix(tree: NliteRouteSegmentModule[]) {
   const rootIndex = getRootLayoutIndex(tree);
   if (rootIndex === -1) return "";
@@ -130,13 +120,11 @@ function wrapSegments(
   for (let index = fromIndex; index >= 0; index -= 1) {
     const segment = tree[index]!;
 
-    // Boundaries above the root layout would render outside <html>, so they are ignored
     if (index < boundaryRootIndex) {
       continue;
     }
 
     const ownsNotFound = index !== fromIndex || includeOwnNotFound;
-    // The root layout segment always gets a not-found boundary, falling back to the default UI
     if (ownsNotFound && (segment.notFound || index === boundaryRootIndex)) {
       element = React.createElement(NotFoundBoundary, {
         children: element,
