@@ -6,6 +6,7 @@ export default defineConfig((_opt): UserConfig[] => [
       index: "./src/index.ts",
       "lib/link": "./src/lib/link.tsx",
       "lib/navigation": "./src/lib/navigation/index.ts",
+      "lib/navigation.react-server": "./src/lib/navigation/index.react-server.ts",
       "lib/headers": "./src/lib/headers.ts",
       "lib/worker/*": "./src/lib/worker/*.ts",
       "lib/mdx": "./src/lib/mdx/index.ts",
