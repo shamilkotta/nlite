@@ -19,6 +19,7 @@ export default defineConfig((_opt): UserConfig[] => [
       "lib/error-boundary": "./src/lib/error-boundary.tsx",
       "lib/not-found-boundary": "./src/lib/not-found-boundary.tsx",
       "lib/redirect-boundary": "./src/lib/redirect-boundary.tsx",
+      "lib/prefetch-hole": "./src/lib/prefetch-hole.tsx",
       "utils/elements/global-error": "./src/utils/elements/global-error.tsx",
       "modules/*": "./src/modules/*.ts",
       adapters: "./src/adapters/index.ts",

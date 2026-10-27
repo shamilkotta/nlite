@@ -11,6 +11,9 @@ export const RESPONSE_STATUS_HEADER = "x-nlite-status";
 export const RESUME_HEADER = "x-nlite-resume";
 export const RSC_POSTFIX = ".rsc";
 export const META_POSTFIX = ".meta";
+/** Prefetch payloads live under their own path so static hosts can serve them as plain files */
+export const PREFETCH_PREFIX = "/_nlite/prefetch";
+export const PREFETCH_INDEX = "/__index";
 
 const DEFAULT_STALE_TIMES = {
   static: 300,

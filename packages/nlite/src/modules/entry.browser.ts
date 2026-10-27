@@ -1,4 +1,8 @@
-import React, { startTransition, useInsertionEffect, useLayoutEffect } from "react";
+import React, {
+  startTransition,
+  useInsertionEffect,
+  useLayoutEffect,
+} from "react";
 import { hydrateRoot, type Root } from "react-dom/client";
 import { createFromReadableStream } from "@vitejs/plugin-rsc/browser";
 
@@ -7,12 +11,25 @@ import {
   NavigationProvider,
   type NavigationRuntime,
 } from "../lib/navigation/client.js";
-import { fetchRouteTree, invalidateRouteCache, prefetchRoute } from "../lib/route-cache.js";
-import type { RouterNavigateOptions, RscPayload } from "../types.js";
+import {
+  fetchRouteTree,
+  getPrefetchShell,
+  hasFreshRoute,
+  invalidateRouteCache,
+  prefetchRoute,
+} from "../lib/route-cache.js";
+import type {
+  RouteMetadata,
+  RouterNavigateOptions,
+  RscPayload,
+} from "../types.js";
+import { toPrefetchPathname } from "../utils/path.js";
 import { AppHead } from "../utils/elements/document.js";
 
 let navigationRoot: Root | null = null;
 let navigationVersion = 0;
+// Shells may omit metadata; the head keeps the last known metadata until the full payload lands
+let currentMetadata: RouteMetadata = {};
 let currentPayload: RscPayload | null = null;
 
 interface PendingNavigation {
@@ -78,7 +95,7 @@ function createNavigationRuntime(): NavigationRuntime {
         return;
       }
 
-      await prefetchRoute(url, createRscHref);
+      await prefetchRoute(url, createPrefetchHref);
     },
   };
 }
@@ -134,38 +151,79 @@ async function renderUrl(
   },
 ) {
   const version = ++navigationVersion;
-  const nextRoot = await fetchRouteTree(url, createRscHref, {
+  const shell =
+    !options.bypassCache && !hasFreshRoute(url) ? getPrefetchShell(url) : null;
+  const pendingRoot = fetchRouteTree(url, createRscHref, {
     bypassCache: options.bypassCache,
   });
+
+  // Commit the prefetched shell right away, then patch in the full payload once it arrives.
+  // Keys match between the two, so layouts stay mounted and only the holes are filled.
+  if (shell) {
+    if (!commitNavigation(url, shell, options)) {
+      return;
+    }
+  }
+
+  const nextRoot = (await pendingRoot) as RscPayload;
 
   if (version !== navigationVersion) {
     return;
   }
 
-  const nextPayload = nextRoot as RscPayload;
-  // Different root layouts own different <html> documents, so they cannot be reconciled
-  if (currentPayload && nextPayload.rootPrefix !== currentPayload.rootPrefix) {
-    if (options.updateHistory === "replace") {
-      window.location.replace(url.href);
-    } else if (options.updateHistory === "push") {
-      window.location.assign(url.href);
-    } else {
-      window.location.reload();
+  if (shell) {
+    if (nextPayloadChangesRootLayout(nextRoot)) {
+      return hardNavigate(url, false);
     }
+    startTransition(() => {
+      navigationRoot?.render(
+        renderDocument(nextRoot, { url, updateHistory: false, scroll: false }),
+      );
+    });
     return;
+  }
+
+  commitNavigation(url, nextRoot, options);
+}
+
+function commitNavigation(
+  url: URL,
+  payload: RscPayload,
+  options: { updateHistory: false | "push" | "replace"; scroll: boolean },
+) {
+  // Different root layouts own different <html> documents, so they cannot be reconciled
+  if (nextPayloadChangesRootLayout(payload)) {
+    hardNavigate(url, options.updateHistory);
+    return false;
   }
 
   // The URL is rendered with the tree, and history and scroll are applied once the
   // transition commits (see NavigationCommitter), so the old page is never scrolled or relabelled early.
   startTransition(() => {
     navigationRoot?.render(
-      renderDocument(nextPayload, {
+      renderDocument(payload, {
         url,
         updateHistory: options.updateHistory,
         scroll: options.scroll,
       }),
     );
   });
+
+  return true;
+}
+
+function nextPayloadChangesRootLayout(payload: RscPayload) {
+  return !!currentPayload && payload.rootPrefix !== currentPayload.rootPrefix;
+}
+
+function hardNavigate(url: URL, updateHistory: false | "push" | "replace") {
+  if (updateHistory === "replace") {
+    window.location.replace(url.href);
+  } else if (updateHistory === "push") {
+    window.location.assign(url.href);
+  } else {
+    window.location.reload();
+  }
 }
 
 function resolveUrl(href: string) {
@@ -179,6 +237,10 @@ function isSameOrigin(url: URL) {
 function updateBrowserHistory(url: URL, replace = false) {
   const method = replace ? "replaceState" : "pushState";
   window.history[method](null, "", url);
+}
+
+function createPrefetchHref(url: URL) {
+  return `${toPrefetchPathname(url.pathname)}${url.search}`;
 }
 
 function createRscHref(url: URL) {
@@ -204,7 +266,11 @@ function getHashFragmentElement(fragment: string): HTMLElement | null {
     return document.body;
   }
 
-  return document.getElementById(fragment) ?? document.getElementsByName(fragment)[0] ?? null;
+  return (
+    document.getElementById(fragment) ??
+    document.getElementsByName(fragment)[0] ??
+    null
+  );
 }
 
 // Route transitions jump instantly even with `<html data-scroll-behavior="smooth">`;
@@ -233,7 +299,10 @@ function NavigationCommitter({
 }) {
   useInsertionEffect(() => {
     if (navigation.updateHistory) {
-      updateBrowserHistory(navigation.url, navigation.updateHistory === "replace");
+      updateBrowserHistory(
+        navigation.url,
+        navigation.updateHistory === "replace",
+      );
     }
   }, [navigation]);
 
@@ -243,11 +312,19 @@ function NavigationCommitter({
     }
   }, [navigation]);
 
-  return React.createElement(NavigationProvider, { url: navigation.url }, children);
+  return React.createElement(
+    NavigationProvider,
+    { url: navigation.url },
+    children,
+  );
 }
 
 function renderDocument(payload: RscPayload, navigation: PendingNavigation) {
   currentPayload = payload;
+  if (payload.metadata) {
+    currentMetadata = payload.metadata;
+  }
+
   return React.createElement(
     NavigationCommitter,
     { navigation },
@@ -255,7 +332,7 @@ function renderDocument(payload: RscPayload, navigation: PendingNavigation) {
     React.createElement(
       React.Fragment,
       null,
-      React.createElement(AppHead, { metadata: payload.metadata }),
+      React.createElement(AppHead, { metadata: currentMetadata }),
       payload.root,
     ),
   );

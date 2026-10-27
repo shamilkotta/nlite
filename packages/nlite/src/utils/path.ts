@@ -1,5 +1,5 @@
 import type { RouteParams } from "../types.js";
-import { META_POSTFIX, RSC_POSTFIX } from "./constants.js";
+import { META_POSTFIX, PREFETCH_INDEX, PREFETCH_PREFIX, RSC_POSTFIX } from "./constants.js";
 
 export function normalizeRoutePath(routePath: string) {
   if (!routePath || routePath === "/") {
@@ -16,6 +16,26 @@ export function normalizeHtmlFilePath(routePath: string) {
   }
 
   return routePath.slice(1) + ".html";
+}
+
+/** URL pathname of a route's prefetch payload, e.g. `/blog/a` -> `/_nlite/prefetch/blog/a.rsc` */
+export function toPrefetchPathname(pathname: string) {
+  const routePath = normalizeRoutePath(pathname);
+  return `${PREFETCH_PREFIX}${routePath === "/" ? PREFETCH_INDEX : routePath}${RSC_POSTFIX}`;
+}
+
+/** Inverse of `toPrefetchPathname`; undefined when the pathname is not a prefetch request */
+export function fromPrefetchPathname(pathname: string) {
+  if (!pathname.startsWith(`${PREFETCH_PREFIX}/`) || !pathname.endsWith(RSC_POSTFIX)) {
+    return;
+  }
+
+  const routePath = pathname.slice(PREFETCH_PREFIX.length, -RSC_POSTFIX.length);
+  return routePath === PREFETCH_INDEX ? "/" : normalizeRoutePath(routePath);
+}
+
+export function normalizePrefetchFilePath(routePath: string) {
+  return toPrefetchPathname(routePath).slice(1);
 }
 
 export function normalizeMetaFilePath(routePath: string) {

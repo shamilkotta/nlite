@@ -19,6 +19,7 @@ import {
   normalizeMetaFilePath,
   normalizeRoutePath,
   normalizeRscFilePath,
+  normalizePrefetchFilePath,
 } from "../utils/path.js";
 import { sirv } from "../lib/sirv.js";
 import { createWorker, type WorkerProxy } from "../lib/worker/index.js";
@@ -135,6 +136,8 @@ async function renderStatic(config: ResolvedConfig, options: NliteOptions) {
         !result.postponed
           ? writeToFile(path.join(outDir, normalizeRscFilePath(routePath)), result.rsc)
           : null,
+        // Prefetch payload: the full payload for static routes, the static shell for PPR routes
+        writeToFile(path.join(outDir, normalizePrefetchFilePath(routePath)), result.rsc),
         writeToFile(
           path.join(outDir, normalizeMetaFilePath(routePath)),
           JSON.stringify({

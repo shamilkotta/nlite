@@ -175,7 +175,12 @@ function createSsrRoot(rscStream: ReadableStream, url: URL) {
     const { root, metadata } = React.use(payload);
     // Mirrors the browser root (NavigationCommitter) so client hooks render the same URL.
     // Head nodes are hoisted by React into the <head> rendered by the user's root layout
-    return createElement(NavigationProvider, { url }, createElement(AppHead, { metadata }), root);
+    return createElement(
+      NavigationProvider,
+      { url },
+      createElement(AppHead, { metadata: metadata ?? {} }),
+      root,
+    );
   }
 
   return createElement(SsrRoot);
