@@ -18,7 +18,7 @@ export interface RouteModuleFiles {
 export interface DiscoveredRoute extends RouteModuleFiles {
   id: string;
   routePath: string;
-  /** Project-relative path of the root layout, the first layout above the page */
+  /** Project-relative path of the root layout: the first layout, with only route groups above it */
   rootLayout?: string;
 }
 
@@ -42,7 +42,7 @@ export async function discoverRoutes(projectRoot: string, appDir = "app") {
     const pageDir = path.dirname(pageFile);
     const tree = await collectTree(appRoot, pageDir);
 
-    const rootLayoutFile = tree.find((segment) => segment.layout)?.layout;
+    const rootLayoutFile = findRootLayout(tree, path.relative(appRoot, pageDir));
 
     routes.push({
       id: toPosix(path.relative(projectRoot, pageFile)),
@@ -116,7 +116,7 @@ export async function ensureRootLayouts(
 
   if (mode === "build") {
     throw new Error(
-      `[nlite] Missing root layout for: ${pages.join(", ")}. Add ${toPosix(path.join(appDir, "layout.tsx"))} rendering <html> and <body>.`,
+      `[nlite] Missing root layout for: ${pages.join(", ")}. The root layout must be at the top of app/ or have only route groups above it. Add ${toPosix(path.join(appDir, "layout.tsx"))} rendering <html> and <body>.`,
     );
   }
 
@@ -126,6 +126,19 @@ export async function ensureRootLayouts(
     `[nlite] ${pages.join(", ")} did not have a root layout, so one was created at ${toPosix(path.relative(projectRoot, layoutFile))}`,
   );
   return true;
+}
+
+/**
+ * Like Next.js, only `app/layout` or a layout with nothing but route groups above it can be the root
+ * layout. A first layout under a regular segment (e.g. `app/dashboard/layout`) does not count.
+ */
+function findRootLayout(tree: Awaited<ReturnType<typeof collectTree>>, relativePageDir: string) {
+  const dirs = relativePageDir ? relativePageDir.split(path.sep) : [];
+  const rootIndex = tree.findIndex((segment) => segment.layout);
+  if (rootIndex === -1) return;
+
+  const isRouteGroup = (dir: string) => dir.startsWith("(") && dir.endsWith(")");
+  return dirs.slice(0, rootIndex).every(isRouteGroup) ? tree[rootIndex]!.layout : undefined;
 }
 
 async function collectTree(appRoot: string, pageDir: string) {

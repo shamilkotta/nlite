@@ -116,7 +116,6 @@ export interface RouteMetadata {
 export interface RscPayload {
   root: React.ReactNode;
   metadata: RouteMetadata;
-  /** Identifies the root layout; navigating to a different one triggers a full page load */
   rootLayout?: string;
 }
 
