@@ -118,7 +118,7 @@ export interface RscPayload {
   /** Omitted by prefetch shells that skip metadata; the current head is kept until the full payload */
   metadata?: RouteMetadata;
   /** Identifies the root layout; navigating to a different one triggers a full page load */
-  rootLayout?: string;
+  rootPrefix: string;
   /**
    * Set on prefetch shells that hold only part of the route (the PPR static shell or the tree
    * cut at the deepest loading boundary). The full payload is still fetched on navigation.
@@ -143,8 +143,7 @@ interface NliteModuleComponent extends MetadataModule {
 }
 
 export interface NliteRouteSegmentModule {
-  /** Directory name of the segment, "" for the app root */
-  segment?: string;
+  segment: string;
   layout?: NliteModuleComponent;
   loading?: {
     default: ComponentType;
@@ -163,7 +162,6 @@ export interface NliteRouteRecord {
   sourceFile: string;
   page: NlitePageModule;
   tree: NliteRouteSegmentModule[];
-  rootLayout?: string;
   rendering?: RenderingMode;
   regex: string;
   paramNames: string[];

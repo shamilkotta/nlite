@@ -28,7 +28,6 @@ import { AppHead } from "../utils/elements/document.js";
 
 let navigationRoot: Root | null = null;
 let navigationVersion = 0;
-let currentRootLayout: string | undefined;
 // Shells may omit metadata; the head keeps the last known metadata until the full payload lands
 let currentMetadata: RouteMetadata = {};
 let currentPayload: RscPayload | null = null;
@@ -46,7 +45,6 @@ async function bootNavigation() {
     ? await createFromReadableStream(inlineStream)
     : await fetchRouteTree(new URL(window.location.href), createRscHref);
 
-  currentRootLayout = (payload as RscPayload).rootLayout;
   navigationRoot = hydrateRoot(
     document,
     renderDocument(payload as RscPayload, {
@@ -215,7 +213,7 @@ function commitNavigation(
 }
 
 function nextPayloadChangesRootLayout(payload: RscPayload) {
-  return payload.rootLayout !== currentRootLayout;
+  return !!currentPayload && payload.rootPrefix !== currentPayload.rootPrefix;
 }
 
 function hardNavigate(url: URL, updateHistory: false | "push" | "replace") {

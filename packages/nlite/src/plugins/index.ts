@@ -298,7 +298,6 @@ function buildManifestModule(routes: Awaited<ReturnType<typeof discoverRoutes>>)
   id: ${JSON.stringify(route.id)},
   routePath: ${JSON.stringify(route.routePath)},
   sourceFile: ${JSON.stringify(route.page)},
-  rootLayout: ${JSON.stringify(route.rootLayout)},
   page: ${pageVar},
   tree: [
     ${treeRecord}

@@ -28,7 +28,6 @@ export function createRouteRecord(input: {
   sourceFile: string;
   page: NlitePageModule;
   tree: NliteRouteSegmentModule[];
-  rootLayout?: string;
 }): NliteRouteRecord {
   const rendering = input.page.rendering;
   const { regex, paramNames } = compileRoutePath(input.routePath);
@@ -68,12 +67,16 @@ export function createRouteElement(
   return wrapSegments(route.tree, route.tree.length - 1, page, params, true);
 }
 
+export function getGlobalNotFoundTree(routes: NliteRouteRecord[]): NliteRouteSegmentModule[] {
+  const rootRoute = routes.find((route) => route.routePath === "/") ?? routes[0];
+  return rootRoute?.tree ?? [];
+}
+
 export function createGlobalNotFoundElement(
   routes: NliteRouteRecord[],
   _searchParams: URLSearchParams = new URLSearchParams(),
 ): React.ReactElement {
-  const rootRoute = routes.find((route) => route.routePath === "/") ?? routes[0];
-  const tree = rootRoute?.tree ?? [];
+  const tree = getGlobalNotFoundTree(routes);
   const rootIndex = Math.max(getRootLayoutIndex(tree), 0);
   const notFoundModule = tree[rootIndex]?.notFound;
 
@@ -122,6 +125,20 @@ export function getRootLayoutIndex(tree: NliteRouteSegmentModule[]) {
   return tree.findIndex((segment) => segment.layout);
 }
 
+export function getRootPrefix(tree: NliteRouteSegmentModule[]) {
+  const rootIndex = getRootLayoutIndex(tree);
+  if (rootIndex === -1) return "";
+
+  return (
+    "/" +
+    tree
+      .slice(0, rootIndex + 1)
+      .map((segment) => segment.segment)
+      .filter(Boolean)
+      .join("/")
+  );
+}
+
 function wrapSegments(
   tree: NliteRouteSegmentModule[],
   fromIndex: number,
@@ -136,13 +153,11 @@ function wrapSegments(
   for (let index = fromIndex; index >= 0; index -= 1) {
     const segment = tree[index]!;
 
-    // Boundaries above the root layout would render outside <html>, so they are ignored
     if (index < boundaryRootIndex) {
       continue;
     }
 
     const ownsNotFound = index !== fromIndex || includeOwnNotFound;
-    // The root layout segment always gets a not-found boundary, falling back to the default UI
     if (ownsNotFound && (segment.notFound || index === boundaryRootIndex)) {
       element = React.createElement(NotFoundBoundary, {
         children: element,
