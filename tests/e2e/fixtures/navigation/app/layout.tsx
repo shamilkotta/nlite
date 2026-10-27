@@ -6,13 +6,17 @@ import { LayoutCounter } from "../components/layout-counter";
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <div id="root-layout">
-      <LayoutCounter />
-      <CurrentPath />
-      <Link id="nav-home" href="/" prefetch={false}>
-        home
-      </Link>
-      {children}
-    </div>
+    <html lang="en">
+      <body>
+        <div id="root-layout">
+          <LayoutCounter />
+          <CurrentPath />
+          <Link id="nav-home" href="/" prefetch={false}>
+            home
+          </Link>
+          {children}
+        </div>
+      </body>
+    </html>
   );
 }

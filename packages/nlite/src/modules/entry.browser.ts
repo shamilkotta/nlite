@@ -9,7 +9,7 @@ import {
 } from "../lib/navigation/client.js";
 import { fetchRouteTree, invalidateRouteCache, prefetchRoute } from "../lib/route-cache.js";
 import type { RouterNavigateOptions, RscPayload } from "../types.js";
-import { Document } from "../utils/elements/document.js";
+import { AppHead } from "../utils/elements/document.js";
 
 let navigationRoot: Root | null = null;
 let navigationVersion = 0;
@@ -142,11 +142,24 @@ async function renderUrl(
     return;
   }
 
+  const nextPayload = nextRoot as RscPayload;
+  // Different root layouts own different <html> documents, so they cannot be reconciled
+  if (currentPayload && nextPayload.rootPrefix !== currentPayload.rootPrefix) {
+    if (options.updateHistory === "replace") {
+      window.location.replace(url.href);
+    } else if (options.updateHistory === "push") {
+      window.location.assign(url.href);
+    } else {
+      window.location.reload();
+    }
+    return;
+  }
+
   // The URL is rendered with the tree, and history and scroll are applied once the
   // transition commits (see NavigationCommitter), so the old page is never scrolled or relabelled early.
   startTransition(() => {
     navigationRoot?.render(
-      renderDocument(nextRoot as RscPayload, {
+      renderDocument(nextPayload, {
         url,
         updateHistory: options.updateHistory,
         scroll: options.scroll,
@@ -238,7 +251,13 @@ function renderDocument(payload: RscPayload, navigation: PendingNavigation) {
   return React.createElement(
     NavigationCommitter,
     { navigation },
-    React.createElement(Document, { metadata: payload.metadata }, payload.root),
+    // The user's root layout renders <html>/<body>; head nodes are hoisted into its <head>
+    React.createElement(
+      React.Fragment,
+      null,
+      React.createElement(AppHead, { metadata: payload.metadata }),
+      payload.root,
+    ),
   );
 }
 

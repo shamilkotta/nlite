@@ -14,18 +14,22 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: PropsWithChildren) {
   return (
-    <div className="wrap">
-      <header className="head">
-        <Link href="/" className="brand">
-          nlite · basic
-        </Link>
-        <nav className="head-nav">
-          <Link href="/">Home</Link>
-          <Link href="/examples">Examples</Link>
-          <Link href="/examples/blog">blog</Link>
-        </nav>
-      </header>
-      {children}
-    </div>
+    <html lang="en">
+      <body>
+        <div className="wrap">
+          <header className="head">
+            <Link href="/" className="brand">
+              nlite · basic
+            </Link>
+            <nav className="head-nav">
+              <Link href="/">Home</Link>
+              <Link href="/examples">Examples</Link>
+              <Link href="/examples/blog">blog</Link>
+            </nav>
+          </header>
+          {children}
+        </div>
+      </body>
+    </html>
   );
 }

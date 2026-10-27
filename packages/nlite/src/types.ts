@@ -116,6 +116,7 @@ export interface RouteMetadata {
 export interface RscPayload {
   root: React.ReactNode;
   metadata: RouteMetadata;
+  rootPrefix: string;
 }
 
 export interface NlitePageModule extends MetadataModule {
@@ -131,11 +132,11 @@ interface NliteModuleComponent extends MetadataModule {
   default: ComponentType<{
     children: ReactNode;
     params: Promise<RouteParams>;
-    searchParams: Promise<URLSearchParams>;
   }>;
 }
 
 export interface NliteRouteSegmentModule {
+  segment: string;
   layout?: NliteModuleComponent;
   loading?: {
     default: ComponentType;

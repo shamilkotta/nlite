@@ -1,4 +1,4 @@
-import { access } from "node:fs/promises";
+import { access, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 import { FILE_EXTENSIONS } from "./constants.js";
@@ -8,6 +8,8 @@ import { tryCatch } from "./index.js";
 export interface RouteModuleFiles {
   page: string;
   tree: {
+    /** Directory name of the segment (`""` for the app root), e.g. `(marketing)` or `[lang]` */
+    segment: string;
     layout?: string;
     loading?: string;
     error?: string;
@@ -82,6 +84,75 @@ export async function discoverApiRoutes(projectRoot: string, appDir = "app") {
   return routes.sort((left, right) => scoreRoute(right.routePath) - scoreRoute(left.routePath));
 }
 
+export const DEFAULT_ROOT_LAYOUT = `export default function RootLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <html lang="en">
+      <body>{children}</body>
+    </html>
+  );
+}
+`;
+
+export async function ensureRootLayouts(
+  routes: DiscoveredRoute[],
+  projectRoot: string,
+  appDir: string,
+  mode: "dev" | "build",
+) {
+  const missing = routes.filter((route) => !route.tree.some((segment) => segment.layout));
+  if (missing.length === 0) {
+    return false;
+  }
+
+  const appRoot = path.resolve(projectRoot, appDir);
+  const pages = missing.map((route) => toPosix(path.relative(projectRoot, route.page)));
+
+  if (mode === "build") {
+    throw new Error(
+      `[nlite] Missing root layout for: ${pages.join(", ")}. Add a layout rendering <html> and <body> at the top of ${appDir}/ or of each route group.`,
+    );
+  }
+
+  const layoutDirs = routes.flatMap((route) =>
+    route.tree.flatMap((segment) => (segment.layout ? [path.dirname(segment.layout)] : [])),
+  );
+  const created: string[] = [];
+
+  for (const route of missing) {
+    const dir = findRootLayoutDir(appRoot, path.dirname(route.page), layoutDirs);
+    if (!dir) {
+      throw new Error(
+        `[nlite] ${toPosix(path.relative(projectRoot, route.page))} does not have a root layout, and one cannot be created without wrapping another root layout. Add a layout rendering <html> and <body> above it.`,
+      );
+    }
+
+    const layoutFile = path.join(dir, "layout.tsx");
+    if (!layoutDirs.includes(dir)) {
+      await writeFile(layoutFile, DEFAULT_ROOT_LAYOUT, { flag: "wx" }).catch(() => undefined);
+      layoutDirs.push(dir);
+      created.push(toPosix(path.relative(projectRoot, layoutFile)));
+    }
+  }
+
+  console.warn(
+    `[nlite] ${pages.join(", ")} did not have a root layout, so one was created at ${created.join(", ")}`,
+  );
+  return true;
+}
+
+function findRootLayoutDir(appRoot: string, pageDir: string, layoutDirs: string[]) {
+  if (layoutDirs.length === 0) return appRoot;
+
+  const dirs = path.relative(appRoot, pageDir).split(path.sep).filter(Boolean);
+  for (let depth = 1; depth <= dirs.length; depth += 1) {
+    const candidate = path.join(appRoot, ...dirs.slice(0, depth));
+    const wrapsLayout = layoutDirs.some(
+      (dir) => dir === candidate || dir.startsWith(candidate + path.sep),
+    );
+    if (!wrapsLayout) return candidate;
+  }
+}
+
 async function collectTree(appRoot: string, pageDir: string) {
   const tree = [];
   let currentDir = pageDir;
@@ -93,6 +164,7 @@ async function collectTree(appRoot: string, pageDir: string) {
     const notFound = await findConventionFile(currentDir, "not-found");
 
     const currentSegment = {
+      segment: currentDir === appRoot ? "" : path.basename(currentDir),
       layout,
       loading,
       error,

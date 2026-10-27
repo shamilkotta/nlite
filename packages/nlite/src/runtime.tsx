@@ -1,6 +1,6 @@
 import React, { Suspense } from "react";
 
-import { ErrorBoundary, GlobalErrorElement } from "./lib/error-boundary.js";
+import { ErrorBoundary } from "./lib/error-boundary.js";
 import { NotFoundBoundary } from "./lib/not-found-boundary.js";
 import { RedirectBoundary } from "./lib/redirect-boundary.js";
 import { trackSearchParams } from "./internal/request-context.js";
@@ -14,7 +14,9 @@ import type {
   RenderingMode,
   RouteParams,
 } from "./types.js";
+import { GlobalErrorElement } from "./utils/elements/global-error.js";
 import { DefaultNotFoundElement } from "./utils/elements/not-found.js";
+import { DefaultRootLayout } from "./utils/elements/root-layout.js";
 import { resolveRouteMetadata } from "./utils/metadata/index.js";
 
 export type { NliteRouteMatch, NliteRouteRecord, RenderingMode, RouteParams };
@@ -56,16 +58,74 @@ export function createRouteElement(
   searchParams: URLSearchParams = new URLSearchParams(),
 ): React.ReactElement {
   const trackedSearchParams = trackSearchParams(searchParams);
-  let element: React.ReactElement = React.createElement(route.page.default, {
+  const page = React.createElement(route.page.default, {
     params: Promise.resolve(params),
     searchParams: trackedSearchParams,
   });
 
-  const rootSegment = route.tree[0];
+  return wrapSegments(route.tree, route.tree.length - 1, page, params, true);
+}
 
-  for (const segment of [...route.tree].reverse()) {
-    // The root segment always gets a not-found boundary, falling back to the default UI
-    if (segment.notFound || segment === rootSegment) {
+export function getGlobalNotFoundTree(routes: NliteRouteRecord[]): NliteRouteSegmentModule[] {
+  const rootRoute = routes.find((route) => route.routePath === "/") ?? routes[0];
+  return rootRoute?.tree ?? [];
+}
+
+export function createGlobalNotFoundElement(
+  routes: NliteRouteRecord[],
+  _searchParams: URLSearchParams = new URLSearchParams(),
+): React.ReactElement {
+  const tree = getGlobalNotFoundTree(routes);
+  const rootIndex = Math.max(getRootLayoutIndex(tree), 0);
+  const notFoundModule = tree[rootIndex]?.notFound;
+
+  return wrapSegments(
+    tree.slice(0, rootIndex + 1),
+    rootIndex,
+    React.createElement(notFoundModule?.default ?? DefaultNotFoundElement),
+    {},
+    false,
+  );
+}
+
+export function getRootLayoutIndex(tree: NliteRouteSegmentModule[]) {
+  return tree.findIndex((segment) => segment.layout);
+}
+
+export function getRootPrefix(tree: NliteRouteSegmentModule[]) {
+  const rootIndex = getRootLayoutIndex(tree);
+  if (rootIndex === -1) return "";
+
+  return (
+    "/" +
+    tree
+      .slice(0, rootIndex + 1)
+      .map((segment) => segment.segment)
+      .filter(Boolean)
+      .join("/")
+  );
+}
+
+function wrapSegments(
+  tree: NliteRouteSegmentModule[],
+  fromIndex: number,
+  element: React.ReactElement,
+  params: RouteParams,
+  includeOwnNotFound: boolean,
+): React.ReactElement {
+  const resolvedParams = Promise.resolve(params);
+  const rootIndex = getRootLayoutIndex(tree);
+  const boundaryRootIndex = Math.max(rootIndex, 0);
+
+  for (let index = fromIndex; index >= 0; index -= 1) {
+    const segment = tree[index]!;
+
+    if (index < boundaryRootIndex) {
+      continue;
+    }
+
+    const ownsNotFound = index !== fromIndex || includeOwnNotFound;
+    if (ownsNotFound && (segment.notFound || index === boundaryRootIndex)) {
       element = React.createElement(NotFoundBoundary, {
         children: element,
         notFound: React.createElement(segment.notFound?.default ?? DefaultNotFoundElement),
@@ -86,113 +146,13 @@ export function createRouteElement(
     if (segment.layout) {
       element = React.createElement(segment.layout.default, {
         children: element,
-        params: Promise.resolve(params),
-        searchParams: trackedSearchParams,
-      });
-    }
-  }
-
-  return React.createElement(ErrorBoundary, {
-    children: React.createElement(RedirectBoundary, { children: element }),
-    FallbackComponent: GlobalErrorElement,
-  });
-}
-
-export function createRouteNotFoundElement(
-  route: NliteRouteRecord,
-  params: RouteParams,
-  searchParams: URLSearchParams = new URLSearchParams(),
-): React.ReactElement {
-  const trackedSearchParams = trackSearchParams(searchParams);
-  const resolvedParams = Promise.resolve(params);
-  let notFoundSegmentIndex = -1;
-
-  for (let index = route.tree.length - 1; index >= 0; index -= 1) {
-    if (route.tree[index]?.notFound) {
-      notFoundSegmentIndex = index;
-      break;
-    }
-  }
-
-  if (notFoundSegmentIndex === -1) {
-    return createGlobalNotFoundElement([route], searchParams);
-  }
-
-  const notFoundModule = route.tree[notFoundSegmentIndex]?.notFound;
-  let element: React.ReactElement = React.createElement(notFoundModule!.default);
-
-  for (let index = notFoundSegmentIndex; index >= 0; index -= 1) {
-    const segment = route.tree[index];
-
-    if (segment.notFound && index !== notFoundSegmentIndex) {
-      element = React.createElement(NotFoundBoundary, {
-        children: element,
-        notFound: React.createElement(segment.notFound.default),
-      });
-    }
-    if (segment.loading) {
-      element = React.createElement(Suspense, {
-        children: element,
-        fallback: React.createElement(segment.loading.default),
-      });
-    }
-    if (segment.error) {
-      element = React.createElement(ErrorBoundary, {
-        children: element,
-        FallbackComponent: segment.error.default,
-      });
-    }
-
-    if (segment?.layout) {
-      element = React.createElement(segment.layout.default, {
-        children: element,
         params: resolvedParams,
-        searchParams: trackedSearchParams,
       });
     }
   }
 
-  return React.createElement(ErrorBoundary, {
-    children: React.createElement(RedirectBoundary, { children: element }),
-    FallbackComponent: GlobalErrorElement,
-  });
-}
-
-export function createGlobalNotFoundElement(
-  routes: NliteRouteRecord[],
-  searchParams: URLSearchParams = new URLSearchParams(),
-): React.ReactElement {
-  const rootRoute = routes.find((route) => route.routePath === "/");
-
-  const trackedSearchParams = trackSearchParams(searchParams);
-  const params = Promise.resolve({});
-  const rootSegment = rootRoute?.tree?.[0];
-  const notFoundModule = rootSegment?.notFound;
-
-  let element: React.ReactElement = notFoundModule
-    ? React.createElement(notFoundModule.default)
-    : React.createElement(DefaultNotFoundElement);
-
-  if (rootSegment?.loading) {
-    element = React.createElement(Suspense, {
-      children: element,
-      fallback: React.createElement(rootSegment.loading.default),
-    });
-  }
-
-  if (rootSegment?.error) {
-    element = React.createElement(ErrorBoundary, {
-      children: element,
-      FallbackComponent: rootSegment.error.default,
-    });
-  }
-
-  if (rootSegment?.layout) {
-    element = React.createElement(rootSegment.layout.default, {
-      children: element,
-      params,
-      searchParams: trackedSearchParams,
-    });
+  if (rootIndex === -1) {
+    element = React.createElement(DefaultRootLayout, { children: element });
   }
 
   return React.createElement(ErrorBoundary, {
