@@ -106,7 +106,6 @@ pnpm dev
 - **Request helpers**: `cookies()` and `headers()` from `nlite/headers`, `redirect()` and `notFound()` from `nlite/navigation`
 - **Client navigation**: `Link` with prefetch (`true`, `false`, or `"hover"`), plus `useRouter`, `usePathname`, and `useSearchParams`
 - **Metadata API**: `metadata` and `generateMetadata` exports
-- **MDX content collections** with schema validation (`nlite/mdx`)
 - **Deployment adapters** for Vercel, Cloudflare Workers, and Netlify (`nlite/adapters`)
 - **CLI**: `nlite dev`, `nlite build`, `nlite preview`, and `nlite start` (alias for `preview`)
 
@@ -164,7 +163,7 @@ Full API reference: [`packages/nlite/README.md`](packages/nlite/README.md). A su
 
 | Example                                      | Shows                                  |
 | -------------------------------------------- | -------------------------------------- |
-| [`examples/basic`](examples/basic)           | Routing, layouts, MDX blog, API routes |
+| [`examples/basic`](examples/basic)           | Routing, layouts, API routes          |
 | [`examples/ppr`](examples/ppr)               | Partial Prerendering and `"use cache"` |
 | [`examples/cloudflare`](examples/cloudflare) | Cloudflare Workers deployment          |
 | [`examples/netlify`](examples/netlify)       | Netlify deployment                     |

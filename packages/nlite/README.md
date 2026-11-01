@@ -20,7 +20,7 @@ Project page: https://shamilkotta.com/projects/nlite
 - Route handlers for HTTP endpoints
 - Request helpers for cookies, headers, redirects, and not-found responses
 - Client navigation with `Link` and router hooks
-- Metadata API and MDX content collections
+- Metadata API
 - Deployment adapters for Vercel, Cloudflare Workers, and Netlify
 
 ## Contents
@@ -34,7 +34,6 @@ Project page: https://shamilkotta.com/projects/nlite
 - [Request Data](#request-data)
 - [Navigation](#navigation)
 - [Metadata](#metadata)
-- [MDX Content](#mdx-content)
 - [Configuration](#configuration)
 - [Deployment](#deployment)
 - [Examples](#examples)
@@ -360,36 +359,6 @@ export async function generateMetadata({
   return { title: `User ${id}` };
 }
 ```
-
-## MDX Content
-
-Load Markdown and MDX files as typed content collections. Install the optional peers first:
-
-```bash
-pnpm add -D @mdx-js/rollup gray-matter
-```
-
-```ts
-// nlite.config.ts
-import { defineConfig } from "nlite/config";
-import { defineCollection, mdx } from "nlite/mdx";
-import { z } from "zod";
-
-export default defineConfig({
-  plugins: [
-    mdx({
-      collections: {
-        blog: defineCollection({
-          source: "content/blog/**/*.{md,mdx}",
-          schema: z.object({ title: z.string(), publishedAt: z.coerce.date() }),
-        }),
-      },
-    }),
-  ],
-});
-```
-
-Read entries from server components with `getCollection(name)` and `getEntry(name, slug)` from `nlite/mdx`.
 
 ## Configuration
 

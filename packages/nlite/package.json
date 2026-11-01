@@ -1,6 +1,6 @@
 {
   "name": "nlite",
-  "version": "0.10.1",
+  "version": "0.11.0",
   "description": "Lightweight React 19 framework on Vite with Next.js-style app/ routing: React Server Components, streaming SSR, SSG, Partial Prerendering, route handlers, and adapters for Vercel, Cloudflare, and Netlify",
   "keywords": [
     "app-router",
@@ -9,7 +9,6 @@
     "file-based-routing",
     "framework",
     "layouts",
-    "mdx",
     "meta-framework",
     "netlify",
     "nextjs",
@@ -84,10 +83,6 @@
     "./client": {
       "types": "./client.d.ts"
     },
-    "./mdx": {
-      "types": "./dist/lib/mdx.d.mts",
-      "import": "./dist/lib/mdx.mjs"
-    },
     "./package.json": "./package.json"
   },
   "scripts": {
@@ -104,30 +99,20 @@
   },
   "devDependencies": {
     "@cloudflare/vite-plugin": "^1.37.1",
-    "@mdx-js/rollup": "^3.1.1",
     "@netlify/edge-functions": "^4.0.0",
     "@types/node": "^24.8.1",
     "@types/react": "^19.2.2",
     "@types/react-dom": "^19.2.2",
-    "gray-matter": "^4.0.3",
     "tsdown": "^0.21.7",
     "typescript": "^5.9.3"
   },
   "peerDependencies": {
     "@cloudflare/vite-plugin": "^1.37.1",
-    "@mdx-js/rollup": "^3.1.1",
-    "gray-matter": "^4.0.3",
     "react": "^19.2.5",
     "react-dom": "^19.2.5"
   },
   "peerDependenciesMeta": {
     "@cloudflare/vite-plugin": {
-      "optional": true
-    },
-    "@mdx-js/rollup": {
-      "optional": true
-    },
-    "gray-matter": {
       "optional": true
     }
   },

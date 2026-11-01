@@ -169,53 +169,10 @@ export interface StaleTimes {
   dynamic?: number;
 }
 
-export interface CollectionSchemaSuccess<TOutput> {
-  success: true;
-  data?: TOutput;
-  output?: TOutput;
-}
-
-export interface CollectionSchemaFailure {
-  success: false;
-  error: unknown;
-}
-
-export interface CollectionSchemaLike<TOutput = unknown> {
-  parse?: (input: unknown) => TOutput;
-  safeParse?: (input: unknown) => CollectionSchemaSuccess<TOutput> | CollectionSchemaFailure;
-}
-
-export interface CollectionDefinition<TOutput = unknown> {
-  source?: string | string[] | CollectionSourceConfig;
-  schema?: CollectionSchemaLike<TOutput>;
-}
-
-export type CollectionRecord = Record<string, CollectionDefinition<unknown>>;
-
-export interface CollectionSourceConfig {
-  cwd: string;
-  include?: string | string[];
-  exclude?: string | string[];
-}
-
 export interface NliteOptions {
   appDir?: string;
   staleTimes?: StaleTimes;
   ppr?: boolean;
-}
-
-export interface NliteMdxProps {
-  components?: Record<string, ComponentType>;
-  [key: string]: unknown;
-}
-
-export interface NliteContentEntry<TData = unknown, CProps = NliteMdxProps> {
-  id: string;
-  collection: string;
-  slug: string;
-  body: string;
-  data: TData;
-  Content: ComponentType<CProps>;
 }
 
 export type ApiRouteHandler = (

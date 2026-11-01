@@ -9,7 +9,6 @@ export default defineConfig((_opt): UserConfig[] => [
       "lib/navigation.react-server": "./src/lib/navigation/index.react-server.ts",
       "lib/headers": "./src/lib/headers.ts",
       "lib/worker/*": "./src/lib/worker/*.ts",
-      "lib/mdx": "./src/lib/mdx/index.ts",
       config: "./src/config.ts",
       "internal/default-config": "./src/internal/default-config.ts",
       "internal/cache-runtime": "./src/internal/cache-runtime.ts",
