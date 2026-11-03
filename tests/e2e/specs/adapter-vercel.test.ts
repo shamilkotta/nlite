@@ -63,7 +63,7 @@ describe("vercel() with ppr (Build Output API)", () => {
     });
 
     it("writes nested PPR routes under their directory", () => {
-      expect(app.outputExists("functions/guarded/nested.prerender-config.json")).toBe(true);
+      expect(app.outputExists("functions/with-loading/redirect.prerender-config.json")).toBe(true);
     });
 
     it("does not write prerenders for routes rendered on demand", () => {
@@ -71,15 +71,10 @@ describe("vercel() with ppr (Build Output API)", () => {
       expect(app.outputExists("functions/items")).toBe(false);
     });
 
-    // An empty shell means nothing is sent before the page decides its status, yet the
-    // prerender locks the response to 200 before the function runs.
-    it("does not lock routes with an empty shell to status 200", () => {
+    it("serves routes with no shell from the function", () => {
       for (const route of ["cookies-redirect", "cookies-not-found", "cookies-error", "guarded"]) {
-        const file = `functions/${route}.prerender-config.json`;
-        if (!app.outputExists(file)) continue;
-        const config = app.readJson<PrerenderConfig>(file);
-        expect(config.initialMetadata?.htmlSize, route).toBe(0);
-        expect(config.initialStatus, route).not.toBe(200);
+        expect(app.outputExists(`functions/${route}.prerender-config.json`), route).toBe(false);
+        expect(app.outputExists(`static/${route}.html`), route).toBe(false);
       }
     });
   });

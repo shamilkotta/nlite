@@ -25,7 +25,7 @@ import {
 } from "../utils/path.js";
 import { sirv } from "../lib/sirv.js";
 import { createWorker, type WorkerProxy } from "../lib/worker/index.js";
-import type { PrerenderWorker } from "../internal/prerender-worker.js";
+import type { PrerenderWorker, PrerenderWorkerResult } from "../internal/prerender-worker.js";
 import { tryCatch } from "../utils/index.js";
 
 export function prerender(options: NliteOptions = {}): Plugin {
@@ -131,7 +131,7 @@ async function renderStatic(config: ResolvedConfig, options: NliteOptions) {
         forcePrerender,
       });
 
-      if (result.skip) continue;
+      if (result.skip || hasEmptyShell(result)) continue;
 
       await Promise.all([
         writeToFile(path.join(outDir, normalizeHtmlFilePath(routePath)), result.stream),
@@ -169,6 +169,10 @@ async function renderStatic(config: ResolvedConfig, options: NliteOptions) {
   }
 
   await writeAssetHeaders(outDir, resolveStaleTimes(options.staleTimes));
+}
+
+function hasEmptyShell(result: Extract<PrerenderWorkerResult, { skip: false }>) {
+  return result.postponed !== null && result.stream.length === 0;
 }
 
 function normalizePaths(paths: PrerenderPath[]) {

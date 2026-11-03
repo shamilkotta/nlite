@@ -1,11 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import {
-  clientOutputExists,
-  readClientOutput,
-  readJsonOutput,
-  useFixture,
-} from "../harness/fixture.js";
+import { clientOutputExists, readClientOutput, useFixture } from "../harness/fixture.js";
 import { markWindow, useBrowser, windowMarkerSurvived } from "../harness/browser.js";
 import { textById, titleOf } from "../harness/html.js";
 import { useUpstream } from "../harness/upstream.js";
@@ -23,23 +18,29 @@ describe("PPR routes that are fully dynamic (no shell)", () => {
   const browser = useBrowser();
 
   describe("build output", () => {
-    it("writes an empty shell for a page that reads cookies at the top level", () => {
-      expect(readClientOutput(FIXTURE, "cookies-redirect.html")).toBe("");
-      const meta = readJsonOutput<{ postponed?: unknown }>(FIXTURE, "cookies-redirect.meta");
-      expect(meta.postponed).toBeDefined();
+    it("does not prerender a page that reads cookies at the top level", () => {
+      for (const file of [
+        "cookies-redirect.html",
+        "cookies-redirect.meta",
+        "cookies-redirect.rsc",
+      ]) {
+        expect(clientOutputExists(FIXTURE, file), file).toBe(false);
+      }
+      expect(clientOutputExists(FIXTURE, "cookies-redirect.prefetch.rsc")).toBe(false);
     });
 
-    it("writes an empty shell when only the layout reads cookies", () => {
-      expect(readClientOutput(FIXTURE, "guarded.html")).toBe("");
+    it("does not prerender a page whose layout reads cookies", () => {
+      expect(clientOutputExists(FIXTURE, "guarded.html")).toBe(false);
+      expect(clientOutputExists(FIXTURE, "guarded/nested.html")).toBe(false);
     });
 
     it("does not prerender a dynamic segment without generateStaticParams", () => {
       expect(clientOutputExists(FIXTURE, "items")).toBe(false);
     });
 
-    it("does not bake the redirect target or 404 into the empty shell", () => {
-      for (const file of ["cookies-redirect.html", "cookies-not-found.html", "conditional.html"]) {
-        expect(readClientOutput(FIXTURE, file), file).not.toContain("NLITE_");
+    it("does not prerender pages that decide redirect or 404 from request data", () => {
+      for (const route of ["cookies-not-found", "conditional", "headers-redirect"]) {
+        expect(clientOutputExists(FIXTURE, `${route}.html`), route).toBe(false);
       }
     });
   });
@@ -123,8 +124,8 @@ describe("PPR routes that are fully dynamic (no shell)", () => {
   });
 
   describe("uncached fetch at the top level (no shell)", () => {
-    it("writes an empty shell", () => {
-      expect(readClientOutput(FIXTURE, "fetch-not-found.html")).toBe("");
+    it("does not prerender the page", () => {
+      expect(clientOutputExists(FIXTURE, "fetch-not-found.html")).toBe(false);
     });
 
     it("answers 404 when the fetched data leads to notFound()", async () => {
