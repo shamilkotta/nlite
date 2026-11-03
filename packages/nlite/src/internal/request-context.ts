@@ -110,9 +110,9 @@ export function trackSearchParams<T extends URLSearchParams>(value: T): Promise<
   return {
     // oxlint-disable-next-line no-thenable
     then(onFulfilled, onRejected) {
-      return markDynamicUsage("searchParams").then(() =>
-        Promise.resolve(value).then(onFulfilled, onRejected),
-      );
+      return markDynamicUsage("searchParams")
+        .then(() => value)
+        .then(onFulfilled, onRejected);
     },
     catch(onRejected) {
       return Promise.resolve(value).catch(onRejected);
