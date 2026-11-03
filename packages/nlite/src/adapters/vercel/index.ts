@@ -3,7 +3,14 @@ import path from "node:path";
 import type { Plugin, PluginOption, ResolvedConfig } from "vite";
 
 import type { NliteOptions } from "../../types.js";
-import { NOT_FOUND_RSC_FILE, resolveStaleTimes, STALE_TIME_HEADER } from "../../utils/constants.js";
+import {
+  NOT_FOUND_RSC_FILE,
+  PARTIAL_HEADER,
+  PREFETCH_HEADER,
+  resolveStaleTimes,
+  STALE_TIME_HEADER,
+} from "../../utils/constants.js";
+import { normalizePrefetchRscFilePath, normalizeRscFilePath } from "../../utils/path.js";
 import { tryCatch } from "../../utils/index.js";
 import { FUNCTION_NAME, SERVER_BUNDLE_DIR, VERCEL_OUTPUT_DIR } from "./constants.js";
 import {
@@ -51,11 +58,11 @@ export function vercel(_options: VercelAdapterOptions = {}): PluginOption[] {
       const runtime = "nodejs24.x";
       await writeVercelFunction(root, serverOutDir, runtime);
 
-      if (nliteOptions.ppr) {
-        await writePprPrerenders(staticDir, path.join(outputDir, "functions"), staleTimes.dynamic);
-      }
+      const pprRoutePaths = nliteOptions.ppr
+        ? await writePprPrerenders(staticDir, path.join(outputDir, "functions"), staleTimes.dynamic)
+        : [];
 
-      await writeVercelConfig(root, staleTimes);
+      await writeVercelConfig(root, staleTimes, pprRoutePaths);
 
       config.logger.info(`[nlite] Vercel build ready in ${path.relative(root, outputDir)}`);
     },
@@ -66,9 +73,6 @@ export function vercel(_options: VercelAdapterOptions = {}): PluginOption[] {
 
 async function writePprPrerenders(staticDir: string, functionsDir: string, staleTime: number) {
   const routes = await collectPartiallyStaticRoutes(staticDir);
-  if (routes.length === 0) {
-    return 0;
-  }
 
   let groupId = 1;
   for (const route of routes) {
@@ -82,7 +86,7 @@ async function writePprPrerenders(staticDir: string, functionsDir: string, stale
     await removeStaticPprArtifacts(staticDir, route);
   }
 
-  return routes.length;
+  return routes.map((route) => route.routePath);
 }
 
 async function writeVercelFunction(root: string, serverOutDir: string, runtime: string) {
@@ -145,7 +149,11 @@ async function writeFunctionConfig(functionDir: string, runtime: string) {
   );
 }
 
-async function writeVercelConfig(root: string, staleTimes: { static: number; dynamic: number }) {
+async function writeVercelConfig(
+  root: string,
+  staleTimes: { static: number; dynamic: number },
+  pprRoutePaths: string[],
+) {
   const outputDir = path.join(root, VERCEL_OUTPUT_DIR);
 
   await fs.mkdir(outputDir, { recursive: true });
@@ -160,6 +168,18 @@ async function writeVercelConfig(root: string, staleTimes: { static: number; dyn
             status: 308,
             headers: { Location: "/$1" },
           },
+          ...pprRoutePaths.map((routePath) => ({
+            src: escapeRouteRegex(`/${normalizeRscFilePath(routePath)}`),
+            has: [{ type: "header", key: PREFETCH_HEADER, value: "1" }],
+            dest: `/${normalizePrefetchRscFilePath(routePath)}`,
+            check: true,
+            headers: {
+              "content-type": "text/x-component;charset=utf-8",
+              vary: PREFETCH_HEADER,
+              [STALE_TIME_HEADER]: String(staleTimes.static),
+              [PARTIAL_HEADER]: "1",
+            },
+          })),
           {
             src: "/(.*\\.rsc)",
             headers: { [STALE_TIME_HEADER]: String(staleTimes.static) },
@@ -187,6 +207,10 @@ async function writeVercelConfig(root: string, staleTimes: { static: number; dyn
       2,
     )}\n`,
   );
+}
+
+function escapeRouteRegex(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 async function copyDir(source: string, destination: string) {

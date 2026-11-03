@@ -136,6 +136,7 @@ interface NliteModuleComponent extends MetadataModule {
 }
 
 export interface NliteRouteSegmentModule {
+  segment: string;
   layout?: NliteModuleComponent;
   loading?: {
     default: ComponentType;
