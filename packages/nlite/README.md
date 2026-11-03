@@ -299,7 +299,11 @@ export function UserLink() {
 }
 ```
 
-`prefetch` accepts `true`, `false`, or `"hover"`.
+`prefetch` accepts `true`, `false`, or `"hover"`:
+
+- `true` (default): prefetch when the link scrolls into view, in production builds only.
+- `"hover"`: prefetch on hover, focus, or touch start.
+- `false`: never prefetch.
 
 Client hooks are available from `nlite/navigation`:
 

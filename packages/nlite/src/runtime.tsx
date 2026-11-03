@@ -1,4 +1,4 @@
-import React, { Suspense } from "react";
+import React, { Fragment, Suspense } from "react";
 
 import { ErrorBoundary, GlobalErrorElement } from "./lib/error-boundary.js";
 import { NotFoundBoundary } from "./lib/not-found-boundary.js";
@@ -63,7 +63,8 @@ export function createRouteElement(
 
   const rootSegment = route.tree[0];
 
-  for (const segment of [...route.tree].reverse()) {
+  for (let index = route.tree.length - 1; index >= 0; index -= 1) {
+    const segment = route.tree[index];
     // The root segment always gets a not-found boundary, falling back to the default UI
     if (segment.notFound || segment === rootSegment) {
       element = React.createElement(NotFoundBoundary, {
@@ -81,6 +82,13 @@ export function createRouteElement(
       element = React.createElement(ErrorBoundary, {
         children: element,
         FallbackComponent: segment.error.default,
+      });
+    }
+    const childSegment = route.tree[index + 1];
+    if (childSegment) {
+      element = React.createElement(Fragment, {
+        key: resolveSegmentKey(childSegment.segment, params),
+        children: element,
       });
     }
     if (segment.layout) {
@@ -260,6 +268,21 @@ export async function collectStaticPaths(routes: NliteRouteRecord[]) {
   }
 
   return output;
+}
+
+function resolveSegmentKey(segment: string, params: RouteParams) {
+  const catchAll = segment.match(/^\[\.\.\.(.+)\]$/);
+  if (catchAll) {
+    const value = params[catchAll[1]];
+    return Array.isArray(value) ? value.join("/") : String(value ?? "");
+  }
+
+  const dynamic = segment.match(/^\[(.+)\]$/);
+  if (dynamic) {
+    return String(params[dynamic[1]] ?? "");
+  }
+
+  return segment;
 }
 
 function interpolateRoutePath(routePath: string, params: RouteParams) {

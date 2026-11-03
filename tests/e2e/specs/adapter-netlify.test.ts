@@ -18,7 +18,7 @@ describe("netlify() with ppr (edge function + serverless function)", () => {
         {
           function: "__nlite",
           path: "/*",
-          excludedPath: ["/_nlite/*", "/.netlify/*", "/*.meta"],
+          excludedPath: ["/_nlite/*", "/.netlify/*", "/*.meta", "/*.prefetch.rsc"],
         },
       ]);
     });
@@ -87,6 +87,23 @@ describe("netlify() with ppr (edge function + serverless function)", () => {
       const body = await response.text();
       expect(textById(body, "shell")).toBe("Partial shell");
       expect(textById(body, "user")).toBe("ada");
+    });
+
+    it("serves the prebuilt RSC shell to prefetch requests", async () => {
+      const response = await app.fetch("/partial.rsc", {
+        headers: { cookie: "user=ada", "x-nlite-prefetch": "1" },
+      });
+      expect(response.status).toBe(200);
+      expect(response.headers.get("x-nlite-partial")).toBe("1");
+      const body = await response.text();
+      expect(body).toContain("Partial shell");
+      expect(body).not.toContain('"id":"user"');
+    });
+
+    it("renders a dynamic route's shell for prefetch requests", async () => {
+      const response = await app.fetch("/items/1.rsc", { headers: { "x-nlite-prefetch": "1" } });
+      expect(response.status).toBe(200);
+      expect(response.headers.get("x-nlite-partial")).toBe("1");
     });
 
     it("resumes the RSC payload", async () => {

@@ -101,6 +101,7 @@ export const config = {
     "/_nlite/*",
     "/.netlify/*",
     "/*.meta",
+    "/*.prefetch.rsc",
   ],
 };
 `;
@@ -258,7 +259,7 @@ export const config = {
   generator: ${JSON.stringify(generator)},
   path: ["/*", ${JSON.stringify(ORIGIN_PATH)}],
   preferStatic: true,
-  excludedPath: ["/*.meta", "/*.html"], // TODO: need revisit here, check entry.edge.ts:57
+  excludedPath: ["/*.meta", "/*.html", "/*.prefetch.rsc"], // TODO: need revisit here, check entry.edge.ts:57
   includedFiles: [${JSON.stringify(`${NETLIFY_FUNCTIONS_DIR}/${FUNCTION_NAME}/**`)}],
 };
 `;
@@ -278,7 +279,7 @@ async function writeNetlifyConfig(root: string, ppr: boolean) {
       {
         function: EDGE_FUNCTION_NAME,
         path: "/*",
-        excludedPath: ["/_nlite/*", "/.netlify/*", "/*.meta"],
+        excludedPath: ["/_nlite/*", "/.netlify/*", "/*.meta", "/*.prefetch.rsc"],
       },
     ];
   }

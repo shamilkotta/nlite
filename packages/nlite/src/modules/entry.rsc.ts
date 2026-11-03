@@ -21,6 +21,8 @@ import type { PostponedState } from "react-dom/static";
 import { NEXT_RESUME_HEADER } from "../adapters/vercel/constants.js";
 import {
   NOT_FOUND_ROUTE_PATH,
+  PARTIAL_HEADER,
+  PREFETCH_HEADER,
   RESPONSE_STATUS_HEADER,
   RESUME_HEADER,
   STALE_TIME_HEADER,
@@ -68,6 +70,10 @@ export async function handler(request: Request, env?: NliteHandlerEnv) {
     const meta = await loadPrerenderMeta(request);
     if (!meta?.postponed) return new Response(null, { status: 204 });
     return resumeRenderResponse(request, match, renderRequest, meta as PrerenderMeta);
+  }
+
+  if (renderRequest.isRsc && request.headers.get(PREFETCH_HEADER) === "1") {
+    return prefetchRenderResponse(request, match, renderRequest);
   }
 
   const stream = await runWithRequestContext(
@@ -135,6 +141,32 @@ async function notFoundHandler(request: Request, env?: NliteHandlerEnv) {
   return finalizeRenderResponse(stream, {
     renderRequest,
     status: 404,
+  });
+}
+
+async function prefetchRenderResponse(
+  request: Request,
+  match: NonNullable<ReturnType<typeof matchRoute>>,
+  renderRequest: ReturnType<typeof parseRenderRequest>,
+) {
+  const { prelude } = await prerenderFlight(match, renderRequest, request, { partial: true });
+  const headers = {
+    vary: PREFETCH_HEADER,
+    [STALE_TIME_HEADER]: String(__NLITE_STALE_TIMES__.static),
+    [PARTIAL_HEADER]: "1",
+  };
+
+  if (!prelude) {
+    return new Response(null, { status: 204, headers });
+  }
+
+  return new Response(prelude, {
+    status: 200,
+    headers: {
+      ...headers,
+      "content-type": "text/x-component;charset=utf-8",
+      [RESPONSE_STATUS_HEADER]: "200",
+    },
   });
 }
 
@@ -210,6 +242,7 @@ async function finalizeRenderResponse(
       status: httpStatus,
       headers: {
         "content-type": "text/x-component;charset=utf-8",
+        vary: PREFETCH_HEADER,
         [STALE_TIME_HEADER]: String(__NLITE_STALE_TIMES__.dynamic),
         [RESPONSE_STATUS_HEADER]: String(responseStatus),
       },
@@ -298,30 +331,57 @@ async function prerenderRoute(
     onDynamicUsage?: () => void;
   },
 ): Promise<PrerenderResult> {
+  const flight = await prerenderFlight(match, renderRequest, request, {
+    partial: Boolean(options.ppr) && !options.forcePrerender,
+    forcePrerender: options.forcePrerender,
+    onDynamicUsage: options.onDynamicUsage,
+  });
+
+  if (!flight.prelude || (flight.dynamicAbort && !options.ppr)) {
+    return { skip: true };
+  }
+
+  const result = await finalizePrerenderResult(flight.prelude, renderRequest.url, {
+    abort: flight.halted,
+  });
+
+  return { ...result, cache: await flight.cache.serialize(), skip: false };
+}
+
+async function prerenderFlight(
+  match: NonNullable<ReturnType<typeof matchRoute>>,
+  renderRequest: ReturnType<typeof parseRenderRequest>,
+  request: Request,
+  options: {
+    partial: boolean;
+    forcePrerender?: boolean;
+    onDynamicUsage?: () => void;
+  },
+) {
   const dynamicUsage = new DynamicPrerenderUsageError();
   const { route, params } = match;
-
-  const allowPartialShell = Boolean(options.ppr) && !options.forcePrerender;
+  const searchParams = renderRequest.url.searchParams;
   const cache = new PrerenderCache();
 
-  if (allowPartialShell) {
+  const renderFlight = async (signal: AbortSignal) => {
+    const metadata = await resolveRouteMetadata(route, params, searchParams);
+    const app = createRouteElement(route, params, searchParams);
+    return prerender<RscPayload>({ root: app, metadata }, createClientManifest(), {
+      signal,
+      onError: onRscError,
+    });
+  };
+
+  if (options.partial) {
     const cacheSignal = new CacheSignal();
     const prospectiveController = new AbortController();
-    // TODO: shouldn't be this also on another worker?
     const pendingProspectiveRender = runWithRequestContext(
       request,
-      async () => {
-        const metadata = await resolveRouteMetadata(route, params, renderRequest.url.searchParams);
-        const app = createRouteElement(route, params, renderRequest.url.searchParams);
-        return prerender<RscPayload>({ root: app, metadata }, createClientManifest(), {
-          signal: prospectiveController.signal,
-          onError: onRscError,
-        });
-      },
+      () => renderFlight(prospectiveController.signal),
       {
         cache,
         cacheSignal,
-        searchParams: renderRequest.url.searchParams,
+        searchParams,
         signal: prospectiveController.signal,
         deferDynamic: true,
       },
@@ -337,74 +397,57 @@ async function prerenderRoute(
   }
 
   const controller = new AbortController();
-  let didAbortFlight = false;
+  let halted = false;
 
-  const prerenderResult = await runWithRequestContext(
-    request,
-    async () => {
-      const metadata = await resolveRouteMetadata(route, params, renderRequest.url.searchParams);
-      const app = createRouteElement(route, params, renderRequest.url.searchParams);
-      const renderFlight = () =>
-        prerender<RscPayload>({ root: app, metadata }, createClientManifest(), {
-          signal: controller.signal,
-          onError: onRscError,
-        });
+  const [prerenderResult, prerenderError] = await tryCatch(
+    runWithRequestContext(
+      request,
+      () => {
+        if (!options.partial) return renderFlight(controller.signal);
 
-      if (!allowPartialShell) return renderFlight();
-
-      let flightPending = true;
-      return runInSequentialTasks(
-        () => {
-          const pending = renderFlight();
-          void pending.then(
-            () => {
+        let flightPending = true;
+        return runInSequentialTasks(
+          () => {
+            const pending = renderFlight(controller.signal);
+            const settle = () => {
               flightPending = false;
-            },
-            () => {
-              flightPending = false;
-            },
-          );
-          return pending;
-        },
-        () => {
-          if (flightPending && !controller.signal.aborted) {
-            didAbortFlight = true;
-            controller.abort(dynamicUsage);
-          }
-        },
-      );
-    },
-    {
-      cache,
-      searchParams: renderRequest.url.searchParams,
-      signal: controller.signal,
-      deferDynamic: allowPartialShell,
-      onDynamicUsage() {
-        if (options.forcePrerender) return;
-        options.onDynamicUsage?.();
-        if (!allowPartialShell) controller.abort(dynamicUsage);
+            };
+            void pending.then(settle, settle);
+            return pending;
+          },
+          () => {
+            if (flightPending && !controller.signal.aborted) {
+              halted = true;
+              controller.abort(dynamicUsage);
+            }
+          },
+        );
       },
-    },
+      {
+        cache,
+        searchParams,
+        signal: controller.signal,
+        deferDynamic: options.partial,
+        onDynamicUsage() {
+          if (options.forcePrerender) return;
+          options.onDynamicUsage?.();
+          if (!options.partial) controller.abort(dynamicUsage);
+        },
+      },
+    ),
   );
 
-  if (
-    controller.signal.aborted &&
-    DynamicPrerenderUsageError.isInstance(controller.signal.reason) &&
-    !options.ppr
-  ) {
-    return { skip: true };
+  if (prerenderError && !DynamicPrerenderUsageError.isInstance(prerenderError)) {
+    throw prerenderError;
   }
 
-  if (!prerenderResult?.prelude) {
-    return { skip: true };
-  }
-
-  const abort = allowPartialShell && didAbortFlight;
-  const result = await finalizePrerenderResult(prerenderResult.prelude, renderRequest.url, {
-    abort,
-  });
-
-  return { ...result, cache: await cache.serialize(), skip: false };
+  return {
+    prelude: prerenderResult?.prelude,
+    halted,
+    dynamicAbort:
+      controller.signal.aborted && DynamicPrerenderUsageError.isInstance(controller.signal.reason),
+    cache,
+  };
 }
 
 async function finalizePrerenderResult(

@@ -2,9 +2,16 @@ import type { Context } from "@netlify/edge-functions";
 import {
   normalizeHtmlFilePath,
   normalizeMetaFilePath,
+  normalizePrefetchRscFilePath,
   normalizeRoutePath,
 } from "../../utils/path.js";
-import { RESUME_HEADER, RSC_POSTFIX, STALE_TIME_HEADER } from "../../utils/constants.js";
+import {
+  PARTIAL_HEADER,
+  PREFETCH_HEADER,
+  RESUME_HEADER,
+  RSC_POSTFIX,
+  STALE_TIME_HEADER,
+} from "../../utils/constants.js";
 import { ORIGIN_PATH, ORIGIN_URL_HEADER } from "./constants.js";
 
 interface PrerenderMetaFile {
@@ -84,6 +91,13 @@ async function tryPprStitch(request: Request, context: Context) {
 
   const isRsc = url.pathname.endsWith(RSC_POSTFIX) || url.pathname === "/_rsc";
 
+  // TODO: direct static asset fetch here
+  if (isRsc && request.headers.get(PREFETCH_HEADER) === "1") {
+    return servePrefetchShell(
+      await context.next(assetRequest(request, `/${normalizePrefetchRscFilePath(routePath)}`)),
+    );
+  }
+
   if (isRsc) {
     return callOrigin(createResumeRequest(request, metaText));
   }
@@ -119,6 +133,21 @@ async function tryPprStitch(request: Request, context: Context) {
   headers.set(STALE_TIME_HEADER, String(__NLITE_STALE_TIMES__.dynamic));
 
   return new Response(body, { status: 200, headers });
+}
+
+function servePrefetchShell(shellResponse: Response) {
+  const headers = new Headers({
+    "content-type": "text/x-component;charset=utf-8",
+    vary: PREFETCH_HEADER,
+    [STALE_TIME_HEADER]: String(__NLITE_STALE_TIMES__.static),
+    [PARTIAL_HEADER]: "1",
+  });
+
+  if (!shellResponse.ok) {
+    return new Response(null, { status: 204, headers });
+  }
+
+  return new Response(shellResponse.body, { status: 200, headers });
 }
 
 function shouldConsiderPpr(pathname: string) {

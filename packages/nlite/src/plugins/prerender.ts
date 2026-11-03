@@ -9,6 +9,8 @@ import {
   META_POSTFIX,
   NOT_FOUND_HTML_FILE,
   NOT_FOUND_RSC_FILE,
+  PARTIAL_HEADER,
+  PREFETCH_HEADER,
   RESUME_HEADER,
   resolveStaleTimes,
 } from "../utils/constants.js";
@@ -17,12 +19,13 @@ import type { NliteOptions, PrerenderPath } from "../types.js";
 import {
   normalizeHtmlFilePath,
   normalizeMetaFilePath,
+  normalizePrefetchRscFilePath,
   normalizeRoutePath,
   normalizeRscFilePath,
 } from "../utils/path.js";
 import { sirv } from "../lib/sirv.js";
 import { createWorker, type WorkerProxy } from "../lib/worker/index.js";
-import type { PrerenderWorker } from "../internal/prerender-worker.js";
+import type { PrerenderWorker, PrerenderWorkerResult } from "../internal/prerender-worker.js";
 import { tryCatch } from "../utils/index.js";
 
 export function prerender(options: NliteOptions = {}): Plugin {
@@ -128,13 +131,19 @@ async function renderStatic(config: ResolvedConfig, options: NliteOptions) {
         forcePrerender,
       });
 
-      if (result.skip) continue;
+      if (result.skip || hasEmptyShell(result)) continue;
 
       await Promise.all([
         writeToFile(path.join(outDir, normalizeHtmlFilePath(routePath)), result.stream),
-        !result.postponed
-          ? writeToFile(path.join(outDir, normalizeRscFilePath(routePath)), result.rsc)
-          : null,
+        writeToFile(
+          path.join(
+            outDir,
+            result.postponed
+              ? normalizePrefetchRscFilePath(routePath)
+              : normalizeRscFilePath(routePath),
+          ),
+          result.rsc,
+        ),
         writeToFile(
           path.join(outDir, normalizeMetaFilePath(routePath)),
           JSON.stringify({
@@ -160,6 +169,10 @@ async function renderStatic(config: ResolvedConfig, options: NliteOptions) {
   }
 
   await writeAssetHeaders(outDir, resolveStaleTimes(options.staleTimes));
+}
+
+function hasEmptyShell(result: Extract<PrerenderWorkerResult, { skip: false }>) {
+  return result.postponed !== null && result.stream.length === 0;
 }
 
 function normalizePaths(paths: PrerenderPath[]) {
@@ -255,6 +268,10 @@ function createPprResumeMiddleware(
       })(req, res, next);
     }
 
+    if (req.headers[PREFETCH_HEADER] === "1") {
+      return servePrefetchShell(distDir, req, res, next);
+    }
+
     try {
       const resumeResponse = await handler(await createResumeRequest(req, meta));
       res.statusCode = resumeResponse.status;
@@ -283,6 +300,32 @@ function createPprResumeMiddleware(
       }
     }
   };
+}
+
+function servePrefetchShell(
+  distDir: string,
+  req: Connect.IncomingMessage,
+  res: ServerResponse,
+  next: () => void,
+) {
+  const parsedUrl = parseRequestUrl(req.url);
+  if (!parsedUrl) return next();
+
+  const originalUrl = req.url;
+  const routePath = normalizeRoutePath(parsedUrl.pathname.slice(0, -".rsc".length) || "/");
+  req.url = `/${normalizePrefetchRscFilePath(routePath)}`;
+
+  sirv(distDir, {
+    etag: true,
+    extensions: [],
+    setHeaders(res) {
+      res.setHeader("vary", PREFETCH_HEADER);
+      res.setHeader(PARTIAL_HEADER, "1");
+    },
+  })(req, res, () => {
+    req.url = originalUrl;
+    next();
+  });
 }
 
 async function createResumeRequest(req: Connect.IncomingMessage, meta: string) {

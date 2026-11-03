@@ -9,7 +9,7 @@ import { CONTENT_TYPES, startWebServer, type WebServer } from "./web-server.js";
 
 /**
  * A small local stand-in for the Vercel edge network, driven only by `.vercel/output`:
- * - applies `config.json` routes (status/headers/continue/dest+check/handle: filesystem)
+ * - applies `config.json` routes (status/headers/continue/dest+check/has: header/handle: filesystem)
  * - serves `static/` files
  * - serves PPR prerenders: `initialStatus` + `initialHeaders` + the shell from the fallback
  *   file, then chains a `next-resume` request to the function and streams its body
@@ -25,6 +25,7 @@ interface Route {
   headers?: Record<string, string>;
   continue?: boolean;
   check?: boolean;
+  has?: { type: "header"; key: string; value?: string }[];
   handle?: string;
 }
 
@@ -112,7 +113,7 @@ async function route(
     if (!entry.src) continue;
 
     const match = new RegExp(`^${entry.src}$`).exec(pathname);
-    if (!match) continue;
+    if (!match || !matchesHas(entry, request)) continue;
     const substitute = (value: string) =>
       value.replace(/\$(\d+)/g, (_, i) => match[Number(i)] ?? "");
 
@@ -138,6 +139,13 @@ async function route(
   }
 
   return new Response("Not Found", { status: 404, headers });
+}
+
+function matchesHas(entry: Route, request: Request) {
+  return (entry.has ?? []).every((condition) => {
+    const value = request.headers.get(condition.key);
+    return condition.value === undefined ? value !== null : value === condition.value;
+  });
 }
 
 function serveFilesystem(

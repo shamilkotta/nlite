@@ -7,13 +7,19 @@ import {
   NavigationProvider,
   type NavigationRuntime,
 } from "../lib/navigation/client.js";
-import { fetchRouteTree, invalidateRouteCache, prefetchRoute } from "../lib/route-cache.js";
+import {
+  fetchRouteTree,
+  invalidateRouteCache,
+  prefetchRoute,
+  readRouteTree,
+} from "../lib/route-cache.js";
 import type { RouterNavigateOptions, RscPayload } from "../types.js";
 import { Document } from "../utils/elements/document.js";
 
 let navigationRoot: Root | null = null;
 let navigationVersion = 0;
 let currentPayload: RscPayload | null = null;
+let inflightNavigation: { url: URL; navigation: PendingNavigation } | null = null;
 
 interface PendingNavigation {
   url: URL;
@@ -106,16 +112,20 @@ async function navigate(href: string, options: RouterNavigateOptions) {
     nextUrl.pathname === currentUrl.pathname &&
     nextUrl.search === currentUrl.search
   ) {
-    // Hash-only change: same payload, new URL. Supersedes any navigation still in flight.
-    navigationVersion++;
-    navigationRoot?.render(
-      renderDocument(currentPayload, {
-        url: nextUrl,
-        updateHistory: options.replace ? "replace" : "push",
-        scroll: options.scroll ?? true,
-        onlyHashChange: true,
-      }),
-    );
+    const hashNavigation: PendingNavigation = {
+      url: nextUrl,
+      updateHistory: options.replace ? "replace" : "push",
+      scroll: options.scroll ?? true,
+      onlyHashChange: true,
+    };
+
+    if (inflightNavigation && isSameDocument(inflightNavigation.url, nextUrl)) {
+      inflightNavigation.navigation = hashNavigation;
+    } else {
+      navigationVersion++;
+    }
+
+    navigationRoot?.render(renderDocument(currentPayload, hashNavigation));
     return;
   }
 
@@ -134,25 +144,46 @@ async function renderUrl(
   },
 ) {
   const version = ++navigationVersion;
-  const nextRoot = await fetchRouteTree(url, createRscHref, {
-    bypassCache: options.bypassCache,
-  });
+  const inflight = {
+    url,
+    navigation: { url, updateHistory: options.updateHistory, scroll: options.scroll },
+  };
+  inflightNavigation = inflight;
 
-  if (version !== navigationVersion) {
-    return;
+  const commit = (payload: RscPayload) => {
+    if (version !== navigationVersion) return;
+    startTransition(() => {
+      navigationRoot?.render(renderDocument(payload, inflight.navigation));
+    });
+  };
+
+  try {
+    const cachedTree = options.bypassCache
+      ? undefined
+      : await readRouteTree(url)?.catch(() => undefined);
+
+    if (cachedTree && !cachedTree.partial) {
+      commit(await cachedTree.payload);
+      return;
+    }
+
+    const full = fetchRouteTree(url, createRscHref);
+    let fullCommitted = false;
+
+    void cachedTree?.payload?.then((shell) => {
+      if (!fullCommitted) commit(shell);
+    });
+
+    const fullPayload = await full;
+    fullCommitted = true;
+    commit(fullPayload);
+  } finally {
+    if (inflightNavigation === inflight) inflightNavigation = null;
   }
+}
 
-  // The URL is rendered with the tree, and history and scroll are applied once the
-  // transition commits (see NavigationCommitter), so the old page is never scrolled or relabelled early.
-  startTransition(() => {
-    navigationRoot?.render(
-      renderDocument(nextRoot as RscPayload, {
-        url,
-        updateHistory: options.updateHistory,
-        scroll: options.scroll,
-      }),
-    );
-  });
+function isSameDocument(left: URL, right: URL) {
+  return left.pathname === right.pathname && left.search === right.search;
 }
 
 function resolveUrl(href: string) {

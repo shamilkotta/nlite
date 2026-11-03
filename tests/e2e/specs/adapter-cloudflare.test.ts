@@ -67,6 +67,23 @@ describe("cloudflare() with ppr: two workers (edge + origin)", () => {
       expect(textById(body, "user")).toBe("ada");
     });
 
+    it("serves the prebuilt RSC shell to prefetch requests", async () => {
+      const response = await app.fetch("/partial.rsc", {
+        headers: { cookie: "user=ada", "x-nlite-prefetch": "1" },
+      });
+      expect(response.status).toBe(200);
+      expect(response.headers.get("x-nlite-partial")).toBe("1");
+      const body = await response.text();
+      expect(body).toContain("Partial shell");
+      expect(body).not.toContain('"id":"user"');
+    });
+
+    it("renders a dynamic route's shell for prefetch requests", async () => {
+      const response = await app.fetch("/items/1.rsc", { headers: { "x-nlite-prefetch": "1" } });
+      expect(response.status).toBe(200);
+      expect(response.headers.get("x-nlite-partial")).toBe("1");
+    });
+
     it("resumes the RSC payload for a partial page", async () => {
       const response = await app.fetch("/partial.rsc", { headers: { cookie: "user=ada" } });
       expect(response.status).toBe(200);
