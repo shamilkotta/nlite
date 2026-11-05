@@ -33,9 +33,11 @@ export function prerender(options: NliteOptions = {}): Plugin {
     name: "nlite:prerender",
     config: {
       order: "pre",
-      handler(_config: UserConfig, env: ConfigEnv) {
+      handler(userConfig: UserConfig, env: ConfigEnv) {
+        const corsConfigured = userConfig.preview?.cors || userConfig.server?.cors;
         return {
           appType: env.isPreview ? "mpa" : undefined,
+          preview: corsConfigured ? undefined : { cors: false },
           rsc: {
             serverHandler: undefined,
           },
@@ -124,12 +126,11 @@ async function renderStatic(config: ResolvedConfig, options: NliteOptions) {
 
   try {
     for (const { path: routePath, forcePrerender } of staticPaths) {
-      const result = await worker.renderRoute({
-        ppr: options.ppr,
-        entryPath,
-        routePath,
-        forcePrerender,
-      });
+      const result = await worker
+        .renderRoute({ ppr: options.ppr, entryPath, routePath, forcePrerender })
+        .catch((cause: unknown) => {
+          throw new Error(`Failed to prerender "${routePath}"`, { cause });
+        });
 
       if (result.skip || hasEmptyShell(result)) continue;
 
@@ -223,19 +224,22 @@ function createPprResumeMiddleware(
   handler: (request: Request) => Promise<Response>,
 ) {
   return async (req: Connect.IncomingMessage, res: ServerResponse, next: () => void) => {
+    const url = req.url;
+    const pathname = url?.split("?")[0] ?? "";
     if (
+      !url ||
       (req.method !== "GET" && req.method !== "HEAD") ||
-      (!req.url?.endsWith(".rsc") && !req.url?.endsWith(".html"))
+      (!pathname.endsWith(".rsc") && !pathname.endsWith(".html"))
     ) {
       return next();
     }
 
-    const meta = await resolveRouteMeta(distDir, req.url);
+    const meta = await resolveRouteMeta(distDir, url);
     if (!meta?.trim() || JSON.parse(meta).renderingMode !== "PARTIALLY_STATIC") {
       return next();
     }
 
-    if (req.url?.endsWith(".html")) {
+    if (pathname.endsWith(".html")) {
       const pendingResumes = new WeakMap<ServerResponse, Promise<Response>>();
       return sirv(distDir, {
         etag: true,
