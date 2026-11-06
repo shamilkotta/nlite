@@ -139,12 +139,12 @@ export default defineConfig({
 });
 ```
 
-| Adapter        | Output              | Deploy                      |
-| -------------- | ------------------- | --------------------------- |
-| `vercel()`     | `.nlite`,`.vercel`  | `vercel deploy --prebuilt`  |
-| `cloudflare()` | `.nlite`            | `wrangler deploy`           |
-| `netlify()`    | `.nlite`,`.netlify` | `netlify deploy --prebuilt` |
-|                | `.nlite`            | `nlite start`               |
+| Adapter        | Output              | Deploy                     |
+| -------------- | ------------------- | -------------------------- |
+| `vercel()`     | `.nlite`,`.vercel`  | `vercel deploy --prebuilt` |
+| `cloudflare()` | `.nlite`            | `wrangler deploy`          |
+| `netlify()`    | `.nlite`,`.netlify` | `netlify deploy --prod`    |
+|                | `.nlite`            | `nlite start`              |
 
 `cloudflare()` needs `@cloudflare/vite-plugin` package to be installed.
 

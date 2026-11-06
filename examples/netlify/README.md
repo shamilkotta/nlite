@@ -1,8 +1,9 @@
 # Netlify
 
+https://nlite-ppr.netlify.app/
+
 Partial Prerendering on Netlify with the `netlify()` adapter.
 
 ```bash
-pnpm build
-netlify deploy --prebuilt
+netlify deploy --prod
 ```
