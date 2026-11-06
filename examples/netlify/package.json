@@ -1,21 +1,21 @@
 {
-  "name": "ppr-netlify",
-  "version": "1.0.0",
+  "name": "example-netlify",
   "private": true,
-  "description": "",
-  "keywords": [],
-  "license": "ISC",
-  "author": "",
   "type": "module",
   "scripts": {
     "dev": "nlite dev",
     "build": "nlite build",
-    "preview": "nlite preview"
+    "preview": "nlite preview",
+    "deploy": "nlite build && netlify deploy --prebuilt"
   },
   "dependencies": {
     "nlite": "workspace:*",
     "react": "^19.2.5",
-    "react-dom": "^19.2.5",
-    "wrangler": "^4.92.0"
+    "react-dom": "^19.2.5"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.2",
+    "@types/react-dom": "^19.2.2",
+    "typescript": "^5.9.3"
   }
 }

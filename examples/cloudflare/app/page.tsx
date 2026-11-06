@@ -1,63 +1,32 @@
-import Link from "nlite/link";
+import { Suspense } from "react";
+import { cookies } from "nlite/headers";
 
-import { RenderProbe } from "../components/render-probe";
-import { getServiceStatus } from "../lib/server/app-data";
-import { getRenderTimestamp } from "../lib/server/render-proof";
+export default function Page() {
+  return (
+    <main>
+      <h1>Partial Prerendering</h1>
+      <p className="muted">This shell is prerendered at build time.</p>
+      <BuildTime />
+      <Suspense fallback={<p className="muted">Loading visitor...</p>}>
+        <Visitor />
+      </Suspense>
+    </main>
+  );
+}
 
-export default async function Page() {
-  const status = getServiceStatus();
-  const renderedAt = getRenderTimestamp();
+async function BuildTime() {
+  "use cache";
+
+  return <p>Cached at build: {new Date().toISOString()}</p>;
+}
+
+async function Visitor() {
+  const cookieStore = await cookies();
+  const name = cookieStore.get("name")?.value ?? "stranger";
 
   return (
-    <main className="main">
-      <h1>Home</h1>
-      <p className="muted">
-        Static home route — no request APIs. The status timestamp below is from build output when
-        prerendered.
-      </p>
-      <pre className="block">{JSON.stringify({ status, renderedAt }, null, 2)}</pre>
-
-      <RenderProbe serverRenderedAt={renderedAt} expected="frozen" />
-
-      <h2 className="h2">Examples</h2>
-      <ul className="link-list">
-        <li>
-          <Link href="/examples/auto">auto</Link>
-          <span className="muted"> — static tree</span>
-        </li>
-        <li>
-          <Link href="/examples/force-ssg">force-ssg</Link>
-          <span className="muted"> — request APIs, frozen at build</span>
-        </li>
-        <li>
-          <Link href="/examples/force-ssr">force-ssr</Link>
-          <span className="muted"> — manual SSR</span>
-        </li>
-        <li>
-          <Link href="/examples/ssg/alpha">ssg/[slug]</Link>
-          <span className="muted"> — generateStaticParams + searchParams</span>
-        </li>
-        <li>
-          <Link href="/examples/ssg/gamma?view=grid">ssg/gamma?view=grid</Link>
-          <span className="muted"> — unknown slug → SSR</span>
-        </li>
-        <li>
-          <Link href="/users/alice">users/[id]</Link>
-          <span className="muted"> — dynamic segment + headers/cookies</span>
-        </li>
-        <li>
-          <Link href="/examples/server-fetch">server-fetch</Link>
-          <span className="muted"> — fetch() → auto SSR</span>
-        </li>
-        <li>
-          <Link href="/examples/ppr">ppr</Link>
-          <span className="muted"> — eyeball shell + Smart Placement resume</span>
-        </li>
-      </ul>
-
-      <p>
-        <Link href="/examples">All examples →</Link>
-      </p>
-    </main>
+    <p>
+      Hello {name}, rendered at {new Date().toISOString()}
+    </p>
   );
 }
