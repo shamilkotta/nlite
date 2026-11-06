@@ -28,7 +28,7 @@ export function registerApiRoute(app: H3, route: ApiRouteRecord) {
     route.h3RoutePath,
     defineHandler(async (event) => {
       const method = event.req.method as HttpMethod;
-      const handler = route.module[method];
+      const handler = route.module[method] ?? (method === "HEAD" ? route.module.GET : undefined);
       const allowedMethods = HTTP_METHODS.filter(
         (name) => typeof route.module[name] === "function",
       );
@@ -47,6 +47,11 @@ export function registerApiRoute(app: H3, route: ApiRouteRecord) {
       const response = await handler(event.req, {
         params: Promise.resolve(params),
       } satisfies ApiRouteContext);
+
+      if (method === "HEAD" && !route.module.HEAD) {
+        await response.body?.cancel();
+        return new Response(null, response);
+      }
 
       return response;
     }),

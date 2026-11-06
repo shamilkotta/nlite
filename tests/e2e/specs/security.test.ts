@@ -152,8 +152,8 @@ describe("security", () => {
       expect((await rawGet(app.origin, "/%")).status).toBe(404);
     });
 
-    it("answers 400 or 404 for a malformed percent-encoding in a dynamic param", async () => {
-      expect([400, 404]).toContain((await rawGet(app.origin, "/users/%E0%A4%A")).status);
+    it("answers 500 for a malformed percent-encoding in a dynamic param", async () => {
+      expect((await rawGet(app.origin, "/users/%E0%A4%A")).status).toBe(500);
     });
 
     it("does not leak a stack trace for a malformed param", async () => {

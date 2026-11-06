@@ -41,9 +41,17 @@ export async function discoverRoutes(projectRoot: string, appDir = "app") {
     const pageDir = path.dirname(pageFile);
     const tree = await collectTree(appRoot, pageDir);
 
+    const routePath = toRoutePath(appRoot, pageFile);
+    const conflict = routes.find((route) => route.routePath === routePath);
+    if (conflict) {
+      throw new Error(
+        `Pages "${conflict.id}" and "${toPosix(path.relative(projectRoot, pageFile))}" resolve to the same path "${routePath}"`,
+      );
+    }
+
     routes.push({
       id: toPosix(path.relative(projectRoot, pageFile)),
-      routePath: toRoutePath(appRoot, pageFile),
+      routePath,
       page: pageFile,
       tree,
     });

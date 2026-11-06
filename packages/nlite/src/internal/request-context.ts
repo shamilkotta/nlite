@@ -146,7 +146,11 @@ function parseCookies(header: string | null) {
     for (const part of header.split(";")) {
       const [rawName, ...rawValue] = part.trim().split("=");
       if (!rawName) continue;
-      store.set(decodeURIComponent(rawName), decodeURIComponent(rawValue.join("=")));
+      try {
+        store.set(decodeURIComponent(rawName), decodeURIComponent(rawValue.join("=")));
+      } catch {
+        continue;
+      }
     }
   }
 
