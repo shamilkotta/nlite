@@ -86,7 +86,7 @@ export async function renderHtml(
     } catch (error) {
       if (isRedirectError(error)) {
         htmlStream = await prerenderNavigationShell(bootstrapScriptContent, [
-          createElement("title", null, "Redirecting..."),
+          createElement("title", { key: "title" }, "Redirecting..."),
           createElement("meta", {
             key: "redirect",
             httpEquiv: "refresh",
@@ -95,7 +95,7 @@ export async function renderHtml(
         ]);
       } else if (isNotFoundError(error)) {
         htmlStream = await prerenderNavigationShell(bootstrapScriptContent, [
-          createElement("title", null, "404: This page could not be found"),
+          createElement("title", { key: "title" }, "404: This page could not be found"),
           createElement("meta", { key: "robots", name: "robots", content: "noindex" }),
         ]);
       } else {
@@ -133,7 +133,7 @@ async function renderError(error: unknown, bootstrapScriptContent: string) {
       status: getRedirectStatusCodeFromError(error),
     };
     htmlStream = await renderNavigationShell(bootstrapScriptContent, [
-      createElement("title", null, "Redirecting..."),
+      createElement("title", { key: "title" }, "Redirecting..."),
       createElement("meta", {
         key: "redirect",
         httpEquiv: "refresh",
@@ -143,7 +143,7 @@ async function renderError(error: unknown, bootstrapScriptContent: string) {
   } else if (isNotFoundError(error)) {
     status = 404;
     htmlStream = await renderNavigationShell(bootstrapScriptContent, [
-      createElement("title", null, "404: This page could not be found"),
+      createElement("title", { key: "title" }, "404: This page could not be found"),
       createElement("meta", { key: "robots", name: "robots", content: "noindex" }),
     ]);
   } else {

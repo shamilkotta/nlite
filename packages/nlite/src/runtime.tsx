@@ -233,6 +233,10 @@ export async function collectStaticPaths(routes: NliteRouteRecord[]) {
   const output: PrerenderPath[] = [];
 
   for (const route of routes) {
+    if (typeof route.page.default !== "function") {
+      throw new Error(`Page for "${route.routePath}" has no default export`);
+    }
+
     if (route.rendering === "force-ssr") {
       continue;
     }
@@ -258,6 +262,12 @@ export async function collectStaticPaths(routes: NliteRouteRecord[]) {
     }
 
     const paramsList = await generator();
+
+    if (!Array.isArray(paramsList)) {
+      throw new Error(
+        `generateStaticParams() for "${route.routePath}" must return an array, received ${typeof paramsList}`,
+      );
+    }
 
     for (const params of paramsList) {
       output.push({

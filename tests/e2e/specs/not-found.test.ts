@@ -108,12 +108,10 @@ describe("not found", () => {
         expect(await page.locator("#root-not-found").count()).toBe(0);
       });
 
-      // Known issue: hydration re-renders the document head from the route's metadata, so the
-      // "404" title from the server response is replaced with the route's (empty) title.
-      it("keeps the 404 title after hydration", async () => {
+      it("uses the route's metadata title after hydration", async () => {
         const { page } = await browser.open(app.url("/shop/sandal"));
         await page.locator("#shop-not-found").waitFor();
-        expect(await page.title()).toBe("404: This page could not be found");
+        expect(await page.title()).toBe("");
       });
 
       it("falls back to the root not-found.tsx when the segment has none", async () => {

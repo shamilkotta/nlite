@@ -12,7 +12,7 @@ import {
   RSC_POSTFIX,
   STALE_TIME_HEADER,
 } from "../../utils/constants.js";
-import { ORIGIN_PATH, ORIGIN_URL_HEADER } from "./constants.js";
+import { ORIGIN_PATH, ORIGIN_URL_HEADER, ROOT_RSC_ALIAS } from "./constants.js";
 
 interface PrerenderMetaFile {
   renderingMode?: string;
@@ -89,7 +89,7 @@ async function tryPprStitch(request: Request, context: Context) {
     return null;
   }
 
-  const isRsc = url.pathname.endsWith(RSC_POSTFIX) || url.pathname === "/_rsc";
+  const isRsc = url.pathname.endsWith(RSC_POSTFIX) || url.pathname === `/${ROOT_RSC_ALIAS}`;
 
   // TODO: direct static asset fetch here
   if (isRsc && request.headers.get(PREFETCH_HEADER) === "1") {
@@ -172,8 +172,8 @@ function routePathFromUrl(pathname: string) {
     return normalizeRoutePath(pathname.slice(0, -RSC_POSTFIX.length) || "/");
   }
 
-  if (pathname.endsWith("_rsc")) {
-    return normalizeRoutePath(pathname.slice(0, -"_rsc".length) || "/");
+  if (pathname === `/${ROOT_RSC_ALIAS}`) {
+    return "/";
   }
 
   if (pathname.endsWith(".html")) {

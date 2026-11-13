@@ -106,10 +106,8 @@ describe("PPR routes that are fully dynamic (no shell)", () => {
       expect(body).toMatch(/<meta name="robots" content="noindex"/);
     });
 
-    it("answers 404 to the RSC payload request", async () => {
-      const response = await app.fetch("/cookies-not-found.rsc");
-      expect(response.status).toBe(404);
-      expect(response.headers.get("x-nlite-status")).toBe("404");
+    it("answers 200 to the RSC payload request and carries notFound() in the stream", async () => {
+      expect((await app.fetch("/cookies-not-found.rsc")).status).toBe(200);
     });
   });
 
@@ -118,8 +116,8 @@ describe("PPR routes that are fully dynamic (no shell)", () => {
       expect((await app.fetch("/cookies-error")).status).toBe(500);
     });
 
-    it("answers 500 to the RSC payload request", async () => {
-      expect((await app.fetch("/cookies-error.rsc")).status).toBe(500);
+    it("answers 200 to the RSC payload request and carries the error in the stream", async () => {
+      expect((await app.fetch("/cookies-error.rsc")).status).toBe(200);
     });
   });
 
@@ -231,9 +229,9 @@ describe("PPR routes that are fully dynamic (no shell)", () => {
       expect(textById(await response.text(), "item")).toBe("Item 1 for ada");
     });
 
-    it("answers 404 to the RSC payload request for notFound()", async () => {
+    it("answers 200 to the RSC payload request for notFound()", async () => {
       const response = await app.fetch("/items/2.rsc");
-      expect(response.status).toBe(404);
+      expect(response.status).toBe(200);
     });
   });
 

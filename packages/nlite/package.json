@@ -92,7 +92,7 @@
   },
   "dependencies": {
     "@vitejs/plugin-react": "^6.0.1",
-    "@vitejs/plugin-rsc": "^0.5.35",
+    "@vitejs/plugin-rsc": "^0.5.39",
     "h3": "2.0.1-rc.22",
     "tinyglobby": "^0.2.16",
     "vite": "^8.0.8"
@@ -108,8 +108,8 @@
   },
   "peerDependencies": {
     "@cloudflare/vite-plugin": "^1.37.1",
-    "react": "^19.2.5",
-    "react-dom": "^19.2.5"
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1"
   },
   "peerDependenciesMeta": {
     "@cloudflare/vite-plugin": {

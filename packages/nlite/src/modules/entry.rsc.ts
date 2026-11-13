@@ -41,7 +41,20 @@ function onRscError(error: unknown) {
     return;
   }
 
-  return (error as Error).message; // TODO: revisit this
+  if (import.meta.env.DEV) {
+    return (error as Error).message;
+  }
+
+  console.error(error);
+  return hashDigest(String(error));
+}
+
+function hashDigest(value: string) {
+  let hash = 5381;
+  for (let index = 0; index < value.length; index++) {
+    hash = ((hash << 5) + hash + value.charCodeAt(index)) | 0;
+  }
+  return String(hash >>> 0);
 }
 
 export async function handler(request: Request, env?: NliteHandlerEnv) {
