@@ -1,0 +1,10 @@
+import Link from "nlite/link";
+
+export default function NotFound() {
+  return (
+    <main>
+      <h1>Page not found</h1>
+      <Link href="/">Back home</Link>
+    </main>
+  );
+}

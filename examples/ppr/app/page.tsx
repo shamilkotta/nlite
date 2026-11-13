@@ -1,34 +1,32 @@
 import { Suspense } from "react";
-import { DynamicCmp, DynamicCmp2, DynamicCmp3, SCmp } from "../components/SCmp";
-import CCmp from "../components/CCmp";
-import Link from "nlite/link";
+import { cookies } from "nlite/headers";
 
-// export const rendering = "force-ssg";
-
-export default async function Page() {
+export default function Page() {
   return (
-    <main className="main">
-      <h1>Home</h1>
-      <Link href="/about">About Page</Link>
-      <Link href="/contact">Contact Page</Link>
-      <p className="muted">
-        Static home route — no request APIs. The status timestamp below is from build output when
-        prerendered.
-      </p>
-      <CCmp />
-      <Suspense fallback={<div>Loading...</div>}>
-        <SCmp />
+    <main>
+      <h1>Partial Prerendering</h1>
+      <p className="muted">This shell is prerendered at build time.</p>
+      <BuildTime />
+      <Suspense fallback={<p className="muted">Loading visitor...</p>}>
+        <Visitor />
       </Suspense>
-      <Suspense fallback={<div>Loading...</div>}>
-        <DynamicCmp />
-      </Suspense>
-      {/* <Suspense fallback={<div>Loading...</div>}> */}
-      <DynamicCmp2 />
-      {/* </Suspense> */}
-      <Suspense fallback={<div>Loading...1.2.3...</div>}>
-        <DynamicCmp3 />
-      </Suspense>
-      {/* <DynamicCmp3 /> */}
     </main>
+  );
+}
+
+async function BuildTime() {
+  "use cache";
+
+  return <p>Cached at build: {new Date().toISOString()}</p>;
+}
+
+async function Visitor() {
+  const cookieStore = await cookies();
+  const name = cookieStore.get("name")?.value ?? "stranger";
+
+  return (
+    <p>
+      Hello {name}, rendered at {new Date().toISOString()}
+    </p>
   );
 }

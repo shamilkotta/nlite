@@ -441,6 +441,7 @@ Working examples are in [`examples`](https://github.com/shamilkotta/nlite/tree/m
 
 - `examples/basic`
 - `examples/ppr`
+- `examples/vercel`
 - `examples/cloudflare`
 - `examples/netlify`
 

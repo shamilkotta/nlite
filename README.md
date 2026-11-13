@@ -139,12 +139,12 @@ export default defineConfig({
 });
 ```
 
-| Adapter        | Output              | Deploy                      |
-| -------------- | ------------------- | --------------------------- |
-| `vercel()`     | `.nlite`,`.vercel`  | `vercel deploy --prebuilt`  |
-| `cloudflare()` | `.nlite`            | `wrangler deploy`           |
-| `netlify()`    | `.nlite`,`.netlify` | `netlify deploy --prebuilt` |
-|                | `.nlite`            | `nlite start`               |
+| Adapter        | Output              | Deploy                     |
+| -------------- | ------------------- | -------------------------- |
+| `vercel()`     | `.nlite`,`.vercel`  | `vercel deploy --prebuilt` |
+| `cloudflare()` | `.nlite`            | `wrangler deploy`          |
+| `netlify()`    | `.nlite`,`.netlify` | `netlify deploy --prod`    |
+|                | `.nlite`            | `nlite start`              |
 
 `cloudflare()` needs `@cloudflare/vite-plugin` package to be installed.
 
@@ -161,12 +161,13 @@ Full API reference: [`packages/nlite/README.md`](packages/nlite/README.md). A su
 
 ## Examples
 
-| Example                                      | Shows                                  |
-| -------------------------------------------- | -------------------------------------- |
-| [`examples/basic`](examples/basic)           | Routing, layouts, API routes          |
-| [`examples/ppr`](examples/ppr)               | Partial Prerendering and `"use cache"` |
-| [`examples/cloudflare`](examples/cloudflare) | Cloudflare Workers deployment          |
-| [`examples/netlify`](examples/netlify)       | Netlify deployment                     |
+| Example                                      | Shows                                                        |
+| -------------------------------------------- | ------------------------------------------------------------ |
+| [`examples/basic`](examples/basic)           | Routing, rendering, redirects, loading, error, and not-found |
+| [`examples/ppr`](examples/ppr)               | Partial Prerendering and `"use cache"`                       |
+| [`examples/vercel`](examples/vercel)         | Vercel deployment                                            |
+| [`examples/cloudflare`](examples/cloudflare) | Cloudflare Workers deployment                                |
+| [`examples/netlify`](examples/netlify)       | Netlify deployment                                           |
 
 ```bash
 pnpm install

@@ -7,5 +7,5 @@
     "strict": true,
     "types": []
   },
-  "include": ["app", "components", "lib", "nlite.config.ts"]
+  "include": ["app", "nlite.config.ts", "nlite-env.d.ts"]
 }
